@@ -89,6 +89,5 @@ html, body, #root { height: 100%; margin: 0; }
 .toast--success { background: var(--status-success-bg); color: var(--status-success-fg); }
 .toast--danger { background: var(--status-danger-bg); color: var(--status-danger-fg); }
 
-.infotag { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-strong); color: var(--ink-muted); font: 600 10px/1 var(--font-sans); cursor: help; position: relative; margin-left: 4px; }
-.infotag:hover .infotag__bubble, .infotag:focus-visible .infotag__bubble { display: block; }
-.infotag__bubble { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 6px; padding: var(--space-2) var(--space-3); background: var(--ink); color: var(--surface); border-radius: var(--radius-md); font: 400 12px/16px var(--font-sans); white-space: normal; width: 220px; z-index: 10; box-shadow: var(--shadow-overlay); }
+.infotag { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-strong); color: var(--ink-muted); font: 600 10px/1 var(--font-sans); cursor: help; margin-left: 4px; }
+.infotag__bubble { position: fixed; transform: translateX(-50%); padding: var(--space-2) var(--space-3); background: var(--ink); color: var(--surface); border-radius: var(--radius-md); font: 400 12px/16px var(--font-sans); white-space: normal; width: 240px; z-index: 1000; box-shadow: var(--shadow-overlay); text-transform: none; letter-spacing: normal; }
