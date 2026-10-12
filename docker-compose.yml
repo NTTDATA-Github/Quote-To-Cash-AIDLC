@@ -71,6 +71,57 @@ services:
       - odoo-web:/var/lib/odoo
       - ./scripts/odoo-boot.sh:/odoo-boot.sh:ro
 
+  # Containerized api + worker (the same images CI builds and ECS runs). Opt-in via the
+  # `app` profile so the default `docker compose up` (backing services only) and the
+  # host-process flow in scripts/local.sh keep working unchanged:
+  #   docker compose --profile app up --build
+  # Note: inside this network the app reaches floci at http://floci:4566. floci hands back
+  # queue URLs built from FLOCI_BASE_URL, so it is overridden to the in-network host here.
+  app:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      floci:
+        condition: service_started
+    environment:
+      APP_PROFILE: postgres
+      DATABASE_URL: postgresql+psycopg2://portal:portal@postgres:5432/portal
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      ERP_ADAPTER_MODE: stub
+      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+
+  worker:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      floci:
+        condition: service_started
+    environment:
+      APP_PROFILE: postgres
+      DATABASE_URL: postgresql+psycopg2://portal:portal@postgres:5432/portal
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      ERP_ADAPTER_MODE: stub
+      WORKER_ROLE: all
+      RECONCILE_INTERVAL_SECONDS: "30"
+      LOG_LEVEL: INFO
+
 volumes:
   pgdata:
   odoo-db-data:

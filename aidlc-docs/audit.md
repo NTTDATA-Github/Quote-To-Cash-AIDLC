@@ -727,3 +727,11 @@ Follow the AIDLC and make the implementation"
 **Context**: CONSTRUCTION — Code Generation (Increment 6), Commit 2. Increment 6 complete: the four split modules are now independently extractable (no shared write transaction with ordering; sales⊥integration machine-enforced). Next: `git` commit via message file.
 
 ---
+
+## Increment 7 — Deployment Infrastructure (Terraform + AWS) + CI/CD (GitHub Actions)
+**Timestamp**: 2026-10-12T00:00:00Z
+**User Input**: "We need to add infra, follow AIDLC, I want to use terraform + AWS give me the plan" / "continue" / "continue, make sure the pipelines are also ready, I use guthub to store my code"
+**AI Response**: Resumed brownfield workspace. Established that the target architecture already has a complete Infrastructure Design (aidlc-docs/construction/target-arch/infrastructure-design/{infrastructure-design,deployment-architecture}.md) but no Terraform, Dockerfiles, or CI/CD exist on disk (confirmed: no *.tf, no .github/workflows, no Dockerfile). This maps to Construction → Code Generation Part 1 (Planning), reusing the existing Infrastructure Design and extending it with a CI/CD (GitHub Actions) design delta. Authored the Code Generation plan (aidlc-docs/construction/plans/increment7-infra-cicd-code-generation-plan.md) and presented it with open decisions (OIDC auth, TF state backend, environments, deploy trigger, O-INFRA-1/2/3) for approval. No infra/pipeline code generated yet — awaiting GATE approval.
+**Context**: INCEPTION resume (brownfield) → CONSTRUCTION → Infrastructure Design (reuse) → Code Generation Part 1 (plan authored, awaiting approval).
+
+---

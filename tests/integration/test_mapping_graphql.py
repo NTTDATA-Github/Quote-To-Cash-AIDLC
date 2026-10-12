@@ -33,7 +33,7 @@ def _settings() -> Settings:
         worker_roles=frozenset(),
         cognito_user_pool_id=None,
         cognito_client_id=None,
-        cognito_resource_server_id="erp-portal",
+        cognito_resource_server_id="o2c",
         cors_allowed_origins=[],
         mapping_bedrock_model_id="stub-model",
         agent_service_url="http://localhost:8002",

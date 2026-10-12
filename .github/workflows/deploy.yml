@@ -1,0 +1,105 @@
+name: Deploy (staging)
+
+# Build + push images, apply Terraform, run migrations, roll ECS. Triggers:
+#   - push to main  -> auto-deploy staging
+#   - manual run    -> workflow_dispatch
+# The `staging` GitHub Environment can carry a protection rule (required reviewer) if you
+# want a manual approval gate before each deploy. Auth via GitHub OIDC (no stored keys).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+
+jobs:
+  deploy:
+    name: build, apply, migrate
+    runs-on: ubuntu-latest
+    environment: staging
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: ECR login
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build + push images (tagged with the commit SHA)
+        working-directory: .
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          TAG: ${{ github.sha }}
+        run: |
+          docker build -f Dockerfile.api    -t "$REGISTRY/o2c/api:$TAG" .
+          docker build -f Dockerfile.worker -t "$REGISTRY/o2c/worker:$TAG" .
+          docker push "$REGISTRY/o2c/api:$TAG"
+          docker push "$REGISTRY/o2c/worker:$TAG"
+          echo "API_IMAGE=$REGISTRY/o2c/api:$TAG"       >> "$GITHUB_ENV"
+          echo "WORKER_IMAGE=$REGISTRY/o2c/worker:$TAG" >> "$GITHUB_ENV"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+
+      - name: init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=staging/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="dynamodb_table=o2c-tf-locks" \
+            -backend-config="encrypt=true"
+
+      - name: apply
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var-file=envs/staging.tfvars \
+            -var="api_image=${API_IMAGE}" \
+            -var="worker_image=${WORKER_IMAGE}"
+
+      # Run the Alembic migration as a one-off ECS task using the api task definition with
+      # a command override. Runs AFTER apply (so the task def/image exist) and the services
+      # settle on the new revision.
+      - name: Run DB migration (one-off ECS task)
+        run: |
+          CLUSTER=$(terraform output -raw ecs_cluster_name)
+          TASKDEF=$(terraform output -raw api_task_definition_arn)
+          SUBNETS=$(terraform output -json app_subnet_ids | jq -r 'join(",")')
+          SG=$(terraform output -raw app_security_group_id)
+          TASK_ARN=$(aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --launch-type FARGATE \
+            --task-definition "$TASKDEF" \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=ENABLED}" \
+            --overrides '{"containerOverrides":[{"name":"api","command":["python","-m","alembic","upgrade","head"]}]}' \
+            --query 'tasks[0].taskArn' --output text)
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+          CODE=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)
+          echo "Migration exit code: $CODE"
+          [ "$CODE" = "0" ] || { echo "Migration failed"; exit 1; }
+
+      - name: Wait for services to stabilize
+        run: |
+          CLUSTER=$(terraform output -raw ecs_cluster_name)
+          aws ecs wait services-stable --cluster "$CLUSTER" \
+            --services "o2c-staging-api" "o2c-staging-worker"

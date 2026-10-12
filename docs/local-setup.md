@@ -66,7 +66,7 @@ floci emulates Cognito too. Provision a user pool + a demo user, then point the 
 python - <<'PY'
 import boto3
 c = boto3.client("cognito-idp", endpoint_url="http://localhost:4566", region_name="us-east-1")
-pool = c.create_user_pool(PoolName="erp-portal-local",
+pool = c.create_user_pool(PoolName="o2c-local",
     Schema=[{"Name": "tenant_id", "AttributeDataType": "String", "Mutable": True}])
 pool_id = pool["UserPool"]["Id"]
 client_id = c.create_user_pool_client(UserPoolId=pool_id, ClientName="local",
@@ -123,13 +123,13 @@ python - <<'PY'
 import boto3
 c = boto3.client("cognito-idp", endpoint_url="http://localhost:4566", region_name="us-east-1")
 pool_id = "..."  # from step 7
-c.create_user_pool_domain(Domain="erp-portal-local", UserPoolId=pool_id)  # required for the OAuth token endpoint
-c.create_resource_server(UserPoolId=pool_id, Identifier="erp-portal", Name="ERP Portal API",
+c.create_user_pool_domain(Domain="o2c-local", UserPoolId=pool_id)  # required for the OAuth token endpoint
+c.create_resource_server(UserPoolId=pool_id, Identifier="o2c", Name="Order-to-Cash Connector API",
     Scopes=[{"ScopeName": "tenant.tnt_demo", "ScopeDescription": "act as tnt_demo"},
             {"ScopeName": "role.RESELLER", "ScopeDescription": "reseller-level access"}])
 client = c.create_user_pool_client(UserPoolId=pool_id, ClientName="m2m-backend", GenerateSecret=True,
     AllowedOAuthFlows=["client_credentials"], AllowedOAuthFlowsUserPoolClient=True,
-    AllowedOAuthScopes=["erp-portal/tenant.tnt_demo", "erp-portal/role.RESELLER"])
+    AllowedOAuthScopes=["o2c/tenant.tnt_demo", "o2c/role.RESELLER"])
 print("client_id:", client["UserPoolClient"]["ClientId"])
 print("client_secret:", client["UserPoolClient"]["ClientSecret"])
 PY
@@ -137,8 +137,8 @@ PY
 Then, against **real AWS** (not floci — see the gap below), get a token:
 ```bash
 curl -u "$CLIENT_ID:$CLIENT_SECRET" \
-  -d "grant_type=client_credentials&scope=erp-portal/tenant.tnt_demo%20erp-portal/role.RESELLER" \
-  "https://erp-portal-local.auth.us-east-1.amazoncognito.com/oauth2/token"
+  -d "grant_type=client_credentials&scope=o2c/tenant.tnt_demo%20o2c/role.RESELLER" \
+  "https://o2c-local.auth.us-east-1.amazoncognito.com/oauth2/token"
 # -> {"access_token": "...", "token_type": "Bearer", "expires_in": 3600}
 ```
 

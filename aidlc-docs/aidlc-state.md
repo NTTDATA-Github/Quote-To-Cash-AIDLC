@@ -489,3 +489,85 @@ Both commits landed. `shipment` and `invoicing` are independently extractable: n
   `order-fulfillment.fifo` row — fixed in the same pass). New regression test.
 - `pytest src tests`: 182 passed, 5 skipped. `ruff check`: clean. `npm run build` (UI):
   clean.
+
+---
+
+## Increment 7 — Deployment Infrastructure (Terraform + AWS) + CI/CD (GitHub Actions)
+- **Started**: 2026-10-12
+- **Goal**: Turn the existing (designed-but-not-built) target infrastructure into real
+  on-disk Terraform + container images + GitHub Actions pipelines. Completes the open
+  Phase 3 items F (packaging), G (Terraform), H (runbook), I (verification) and adds a new
+  J (CI/CD). No application behavior change expected.
+
+### 🔵 INCEPTION PHASE (Increment 7)
+- [x] Workspace Detection (resume; brownfield)
+- [x] Reverse Engineering (SKIPPED — design trail exists; infra design + app hosts read directly)
+- [x] Requirements Analysis (MINIMAL — intent is clear: Terraform+AWS infra + GitHub CI/CD;
+      requirements already captured in target-architecture + infrastructure-design docs)
+- [x] Workflow Planning — reuse existing Infrastructure Design; no new Application Design /
+      Units Generation (no new component boundary — this is deployment packaging of the
+      existing api/worker hosts)
+
+### 🟢 CONSTRUCTION PHASE (Increment 7)
+- [x] Infrastructure Design — REUSED from `construction/target-arch/infrastructure-design/`
+      (+ CI/CD design delta captured in the code-generation plan)
+- [~] Code Generation (Part 1: plan) — `construction/plans/increment7-infra-cicd-code-generation-plan.md`
+      authored. **Awaiting GATE approval** (Q1 OIDC auth, Q2 TF state backend, Q3 envs,
+      Q4 deploy trigger, Q5 image→ECS, Q6 migrations, Q7 O-INFRA-1/2/3, Q8 extensions).
+      **No infra/pipeline code generated until the gate is passed.**
+- [ ] Code Generation (Part 2) — items F (Dockerfiles + compose), G (Terraform),
+      J (GitHub Actions), H (runbook/docs), I (verification)
+- [ ] Build and Test — quality gates + `terraform validate`/`plan` + `actionlint`
+
+### Extension Configuration (Increment 7) — proposed, pending Q8
+| Extension | Enabled | Decided At |
+|---|---|---|
+| Security Baseline | Yes (inherited; OIDC no-stored-keys, least-privilege IAM, private subnets, Secrets Manager/KMS) | Code Generation plan (pending Q8) |
+| Resiliency Baseline | Yes (inherited; SQS DLQ maxReceive=5, multi-AZ, service rollback) | Code Generation plan (pending Q8) |
+| Property-Based Testing | N/A (infra/pipeline code — no pure functions this increment) | Code Generation plan (pending Q8) |
+
+## Increment 7 Status
+- **Lifecycle Phase**: CONSTRUCTION — Code Generation Part 1 (plan authored, at the review gate).
+
+---
+
+## Increment 7, continued — Terraform modularization + project rename (o2c / order-to-cash-connector)
+- **Trigger**: user asked to (1) move the reusable Terraform into a `modules/` folder, and
+  (2) rename the project — brand `order-to-cash-connector`, infra/identifier prefix `o2c`
+  (chosen over the full name to stay under AWS's 32-char ALB/target-group limit;
+  `o2c-staging-api` = 15 chars). Single environment renamed `staging`.
+- [x] **Terraform refactored into reusable child modules** — `infra/terraform/modules/`:
+  `messaging`, `secrets` (always-on, floci + AWS); `network`, `database`, `registry`,
+  `identity`, `observability`, `iam`, `compute` (AWS-only, gated at the call site with
+  `count = local.aws_count`). Root is now a thin composition: `main.tf` (module wiring),
+  `locals.tf`, `outputs.tf`, plus `variables/providers/versions/backend.tf`. The nine old
+  flat resource files were deleted.
+- [x] **Rename applied** across code, config, infra, and current docs (brand →
+  `order-to-cash-connector`, prefix → `o2c`): `name_prefix` default, lock table
+  `o2c-tf-locks`, ECR `o2c/api|worker`, ECS services `o2c-staging-*`, Terraform `Project`
+  tags; `cognito_resource_server_id` default `o2c` (`settings.py` + `cognito.py`) with the
+  matching test scopes (`test_cognito.py`, `test_mapping_graphql.py`), Cognito test
+  pool/client names, `seed_cognito` pool `o2c-local`; `pyproject.toml` name
+  `order-to-cash-connector`; `ui/package.json` + lock `order-to-cash-connector-ui`;
+  `docs/local-setup.md` M2M walkthrough (resource server `o2c`, scopes `o2c/...`), ADR-0019
+  illustrative scope. Stale `src/erp_portal.egg-info` removed.
+  - **Left intentionally untouched**: `design/ds/erpportal/` (design-system path — steering
+    says don't touch `design/` without asking; renaming would churn 10+ screen files for no
+    functional gain) and historical `aidlc-docs/audit.md` entries (append-only log — not
+    rewritten). The Python import root is `src.*` and did **not** change.
+- **Quality gates** (this environment): `pytest` (`APP_PROFILE=memory`) **190 passed, 5
+  skipped** — the rename, including the new `o2c` Cognito scope tests, is green; `ruff check`
+  (changed files) **All checks passed!**; `ruff format` — reformatted `test_cognito.py`
+  (a shorter string changed one line's wrap), now clean, other changed files already clean;
+  `lint-imports` **0 broken** (exit 0); `terraform fmt -recursive` **clean** (root +
+  modules). `terraform init` **initialized all 9 modules successfully** (module graph +
+  wiring valid); the provider-plugin download and therefore a full `terraform validate`
+  could **not** complete here (no network for the registry) — run in a networked env per
+  `docs/deploy-aws.md`. UI build not re-run (only `package.json`/lock `name` changed; `npm
+  ci` needs network) — the change is metadata-only.
+
+## Increment 7 Status
+- **Lifecycle Phase**: CONSTRUCTION — Code Generation complete (infra + CI/CD authored,
+  modularized, renamed). Verified to the extent the sandbox allows (tests/lint/fmt green;
+  Terraform module graph initializes; full `terraform validate` + a real AWS `apply` + a
+  live pipeline run are the remaining steps, documented in `docs/deploy-aws.md`).

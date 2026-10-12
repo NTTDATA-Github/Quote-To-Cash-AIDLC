@@ -168,6 +168,18 @@ class PostgresMappingJobRepository:
             session.close()
         return _job_to_model(row) if row is not None else None
 
+    def list_recent(self, limit: int = 50) -> list[MappingJob]:
+        session = self._session_factory()
+        try:
+            rows = session.execute(
+                select(mapping_jobs_table)
+                .order_by(mapping_jobs_table.c.created_at.desc())
+                .limit(limit)
+            ).all()
+        finally:
+            session.close()
+        return [_job_to_model(row) for row in rows]
+
     def update(self, job: MappingJob) -> None:
         session = self._session_factory()
         try:

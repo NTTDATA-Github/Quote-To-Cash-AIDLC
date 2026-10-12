@@ -184,6 +184,9 @@ class MappingJobType:
     mapping: list[MappingEntryType]  # empty until status is DONE (or if nothing matched)
     error: str | None
     adapter_run_id: str | None  # set once the mapping has been approved & handed off
+    created_at: str
+    schema_name: str | None  # null when the canonical fields were pasted for this job only
+    sample_files: list[str]  # filenames of the ERP exports attached to this job
 
 
 @strawberry.type

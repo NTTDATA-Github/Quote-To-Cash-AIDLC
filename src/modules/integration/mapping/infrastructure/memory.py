@@ -46,6 +46,10 @@ class InMemoryMappingJobRepository:
     def update(self, job: MappingJob) -> None:
         self._by_id[job.job_id] = job
 
+    def list_recent(self, limit: int = 50) -> list[MappingJob]:
+        jobs = sorted(self._by_id.values(), key=lambda job: job.created_at, reverse=True)
+        return jobs[:limit]
+
     def claim_pending(self, limit: int = 5) -> list[MappingJob]:
         claimed: list[MappingJob] = []
         for job in self._by_id.values():

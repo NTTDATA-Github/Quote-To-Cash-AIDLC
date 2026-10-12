@@ -3,13 +3,23 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 
 const ADMIN_NAV = [
-  { to: "/admin/notifications", label: "Notifications" },
-  { to: "/admin/orders", label: "Orders" },
-  { to: "/admin/subsidiaries", label: "Subsidiaries" },
-  { to: "/admin/connections", label: "ERP connections" },
-  { to: "/admin/mappings", label: "ERP mapping" },
-  { to: "/admin/tenants", label: "Resellers" },
-  { to: "/admin/failed-messages", label: "Failed messages" },
+  {
+    label: "Run",
+    items: [
+      { to: "/admin/orders", label: "Orders" },
+      { to: "/admin/notifications", label: "Notifications" },
+      { to: "/admin/failed-messages", label: "Failed messages" },
+    ],
+  },
+  {
+    label: "Set up",
+    items: [
+      { to: "/admin/connections", label: "ERP connections" },
+      { to: "/admin/subsidiaries", label: "Subsidiaries" },
+      { to: "/admin/tenants", label: "Resellers" },
+      { to: "/admin/mappings", label: "ERP mapping" },
+    ],
+  },
 ];
 
 function crumbFor(pathname: string): string {
@@ -28,8 +38,6 @@ function crumbFor(pathname: string): string {
 export function AppShell() {
   const { tenantId, roles, signOut } = useAuth();
   const location = useLocation();
-  const navItems = ADMIN_NAV;
-
   return (
     <div className="app">
       <aside className="side">
@@ -38,10 +46,15 @@ export function AppShell() {
           <div className="role">Distributor</div>
         </div>
         <nav className="nav" aria-label="Main">
-          {navItems.map((n) => (
-            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-item ${isActive ? "is-active" : ""}`}>
-              {n.label}
-            </NavLink>
+          {ADMIN_NAV.map((group) => (
+            <div key={group.label} className="nav-group">
+              <div className="nav-label">{group.label}</div>
+              {group.items.map((n) => (
+                <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-item ${isActive ? "is-active" : ""}`}>
+                  {n.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
         <div className="side-note">{tenantId ? `Signed in to tenant ${tenantId}` : "Signed in"}</div>

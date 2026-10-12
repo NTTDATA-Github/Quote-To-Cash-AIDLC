@@ -36,11 +36,15 @@ fi
   --db_host="${HOST:-odoo-db}" \
   --db_user="${USER:-odoo}" \
   --db_password="${PASSWORD:-odoo}" <<'PY'
-group = env.ref("sales_team.group_sale_manager")
+groups = [
+    env.ref("sales_team.group_sale_manager"),
+    env.ref("account.group_account_manager"),
+]
 internals = env["res.users"].search([("share", "=", False)])
-missing = internals.filtered(lambda user: group not in user.groups_id)
-if missing:
-    missing.write({"groups_id": [(4, group.id)]})
+missing_groups = [(user, group) for user in internals for group in groups if group not in user.groups_id]
+for user, group in missing_groups:
+    user.write({"groups_id": [(4, group.id)]})
+if missing_groups:
     env.cr.commit()
 PY
 

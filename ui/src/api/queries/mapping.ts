@@ -23,6 +23,9 @@ export interface MappingJob {
   mapping: MappingEntry[]; // empty until DONE (or if nothing matched)
   error: string | null;
   adapterRunId: string | null;
+  createdAt: string;
+  schemaName: string | null;
+  sampleFiles: string[];
 }
 
 export interface AdapterRun {
@@ -38,12 +41,31 @@ export const CANONICAL_SCHEMAS_QUERY = /* GraphQL */ `
   }
 `;
 
+export const MAPPING_JOBS_QUERY = /* GraphQL */ `
+  query MappingJobs {
+    mappingJobs {
+      jobId
+      erpName
+      status
+      createdAt
+      schemaName
+      sampleFiles
+      mapping { erpField canonicalField sampleData confidence }
+      error
+      adapterRunId
+    }
+  }
+`;
+
 export const MAPPING_JOB_QUERY = /* GraphQL */ `
   query MappingJob($jobId: String!) {
     mappingJob(jobId: $jobId) {
       jobId
       erpName
       status
+      createdAt
+      schemaName
+      sampleFiles
       mapping { erpField canonicalField sampleData confidence }
       error
       adapterRunId

@@ -1,0 +1,24 @@
+# Worker host — SQS FIFO consumers + outbox relay + reconcile scheduler.
+# Identical build to Dockerfile.api; different CMD and no exposed port (the worker is a
+# pure background process — no HTTP surface, so no HEALTHCHECK endpoint either).
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY migrations ./migrations
+COPY alembic.ini ./
+RUN pip install .
+
+RUN useradd --create-home --uid 10001 appuser
+USER appuser
+
+# WORKER_ROLE=all runs consumers + relay + scheduler in one process (ADR-0010 role split
+# lets this be narrowed later without an image change).
+CMD ["python", "-m", "src.worker.main"]

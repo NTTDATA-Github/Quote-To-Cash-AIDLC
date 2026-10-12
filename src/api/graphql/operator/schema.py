@@ -151,6 +151,9 @@ def _mapping_job_to_gql(job: MappingJob) -> MappingJobType:
         ],
         error=job.error,
         adapter_run_id=job.adapter_run_id,
+        created_at=job.created_at.isoformat(),
+        schema_name=job.schema_name,
+        sample_files=list(job.sample_exports),
     )
 
 
@@ -256,6 +259,13 @@ class Query:
             CanonicalSchemaType(name=name, field_count=service.field_count(name))
             for name in service.list_schemas()
         ]
+
+    @strawberry.field
+    def mapping_jobs(self, info: Info[GraphQLContext, None]) -> list[MappingJobType]:
+        """Every proposal, newest first. Several ERPs can be in flight at once."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        return [_mapping_job_to_gql(job) for job in ctx.container.mapping_service.list_jobs()]
 
     @strawberry.field
     def mapping_job(self, info: Info[GraphQLContext, None], job_id: str) -> MappingJobType | None:

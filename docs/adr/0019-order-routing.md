@@ -28,7 +28,7 @@ Two facts, used at different times.
 
 The live path uses the second fact to choose the reseller, because the order is already inside a connection the worker is polling. The subsidiary is a third fact on the same document: `company_id` on the quotation. `subsidiary_routes.erp_company_id` says which subsidiary that company is. Adopt stores that subsidiary. A company id that matches no route is not adopted.
 
-`tenant` is the reseller. Login is Cognito `custom:tenant_id` (or the machine scope `erp-portal/tenant.<id>`). One login, one set of orders, one set of endpoints. Several machines are several webhook endpoints on that same tenant. Several ERPs are several bindings on that same tenant. There is no parent that owns several tenants.
+`tenant` is the reseller. Login is Cognito `custom:tenant_id` (or the machine scope `o2c/tenant.<id>`). One login, one set of orders, one set of endpoints. Several machines are several webhook endpoints on that same tenant. Several ERPs are several bindings on that same tenant. There is no parent that owns several tenants.
 
 ### Where each piece of data comes from, and when it is used
 

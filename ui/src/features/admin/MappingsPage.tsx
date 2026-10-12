@@ -3,12 +3,12 @@ import { useState, type ChangeEvent, type FormEvent } from "react";
 import { DataTable, type Column } from "../../components/DataTable";
 import { InfoTag } from "../../components/InfoTag";
 import { StatusBadge } from "../../components/StatusBadge";
-import type { MappingEntry } from "../../api/queries/mapping";
+import type { MappingEntry, MappingJob } from "../../api/queries/mapping";
 import {
   useAdapterRun,
   useApproveMapping,
   useCanonicalSchemas,
-  useMappingJob,
+  useMappingJobs,
   useRegisterCanonicalSchema,
   useSubmitMapping,
   type SampleFile,
@@ -53,6 +53,7 @@ function toCsv(mapping: MappingEntry[]): string {
 
 export function MappingsPage() {
   const { data: schemas, error: schemasError } = useCanonicalSchemas();
+  const { data: jobs, error: jobsError } = useMappingJobs();
   const registerSchema = useRegisterCanonicalSchema();
   const submit = useSubmitMapping();
   const approve = useApproveMapping();
@@ -67,7 +68,7 @@ export function MappingsPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [approved, setApproved] = useState(false);
 
-  const { data: job } = useMappingJob(jobId);
+  const job = (jobs ?? []).find((item) => item.jobId === jobId) ?? null;
   const runEnabled = approved || !!job?.adapterRunId;
   const { data: run } = useAdapterRun(jobId, runEnabled);
 
@@ -123,20 +124,83 @@ export function MappingsPage() {
   const mapping = job?.mapping ?? [];
   const isRunning = !!jobId && (!job || job.status === "PENDING" || job.status === "PROCESSING");
 
+  const jobColumns: Column<MappingJob>[] = [
+    {
+      key: "when",
+      header: "Submitted",
+      render: (item) => new Date(item.createdAt).toLocaleString(),
+    },
+    { key: "erp", header: "ERP", render: (item) => <span className="id">{item.erpName}</span> },
+    {
+      key: "input",
+      header: "Input",
+      render: (item) => (
+        <span>
+          {item.schemaName ?? "Pasted fields"}
+          {item.sampleFiles.length > 0 ? ` · ${item.sampleFiles.join(", ")}` : ""}
+        </span>
+      ),
+    },
+    { key: "status", header: "Status", render: (item) => <StatusBadge status={statusLabel(item.status)} /> },
+    {
+      key: "output",
+      header: "Output",
+      render: (item) =>
+        item.status === "DONE"
+          ? `${item.mapping.length} fields`
+          : item.status === "FAILED"
+            ? (item.error ?? "Failed")
+            : "—",
+    },
+    {
+      key: "code",
+      header: "Code",
+      render: (item) => {
+        if (item.jobId === jobId && run?.status === "DONE" && run.prUrl) {
+          return (
+            <a href={run.prUrl} target="_blank" rel="noreferrer">
+              Pull request
+            </a>
+          );
+        }
+        if (item.jobId === jobId && run) return statusLabel(run.status);
+        return item.adapterRunId ? "Approved" : "—";
+      },
+    },
+  ];
+
   return (
     <>
       <div className="pagehead">
         <div>
           <h1>ERP mapping</h1>
           <p>
-            Propose how a new ERP&apos;s fields map onto your canonical fields. Upload the ERP&apos;s sample
-            export(s), review the draft the model returns, then approve it to have the adapter implemented.
+            Each ERP is its own job. Attach several CSV or JSON files when one ERP has several sheets. A second
+            ERP is a second row. Open a row to review its mapping, then approve it. Approval sends that mapping to
+            the code generator, which writes the adapter and opens a pull request.
           </p>
         </div>
       </div>
 
+      <section className="panel stack">
+        <h2>Jobs</h2>
+        {jobsError && <div className="callout callout--danger">Could not load jobs: {jobsError.message}</div>}
+        <DataTable
+          columns={jobColumns}
+          rows={jobs ?? []}
+          rowKey={(item) => item.jobId}
+          emptyMessage="No mapping jobs yet. Propose one below."
+          onRowClick={(item) => {
+            setJobId(item.jobId);
+            setApproved(false);
+          }}
+          rowClassName={(item) => (item.jobId === jobId ? "is-selected" : undefined)}
+        />
+      </section>
+
       <form className="panel stack" onSubmit={handleSubmit}>
-        <h2>1. Canonical fields</h2>
+        <h2>1. Propose a mapping</h2>
+        <h3>Canonical fields</h3>
         <div className="actions" role="radiogroup" aria-label="Canonical field source">
           <label>
             <input type="radio" name="source" checked={source === "registered"} onChange={() => setSource("registered")} /> Use a
@@ -214,7 +278,7 @@ export function MappingsPage() {
           </div>
         )}
 
-        <h2>2. ERP sample export(s)</h2>
+        <h3>ERP sample export</h3>
         <div className="grid2">
           <div className="field">
             <label htmlFor="erpName">ERP name</label>
@@ -222,7 +286,7 @@ export function MappingsPage() {
           </div>
           <div className="field">
             <label htmlFor="samples">
-              Sample files <InfoTag text="One or more CSV or JSON-array exports. Read in your browser; only a truncated sample is sent." />
+              Sample files <InfoTag text="One or more CSV or JSON files for this ERP. Export each spreadsheet sheet as its own file. A different ERP is a new job, not another file on this one." />
             </label>
             <input className="input" id="samples" type="file" accept=".csv,.json" multiple onChange={handleFiles} />
           </div>
@@ -242,89 +306,90 @@ export function MappingsPage() {
         </div>
       </form>
 
-      {jobId && job && (
-        <div className="panel stack">
-          <div className="pagehead">
-            <div>
-              <h2>Proposed mapping</h2>
-              <p className="hint">
-                {job.erpName} · <StatusBadge status={statusLabel(job.status)} />
-              </p>
-            </div>
-            {job.status === "DONE" && mapping.length > 0 && (
-              <div className="actions">
-                <button
-                  className="erp-btn erp-btn--ghost erp-btn--sm"
-                  type="button"
-                  onClick={() => downloadBlob(`${job.erpName}_mapping.json`, JSON.stringify(mapping, null, 2), "application/json")}
-                >
-                  Download JSON
-                </button>
-                <button
-                  className="erp-btn erp-btn--ghost erp-btn--sm"
-                  type="button"
-                  onClick={() => downloadBlob(`${job.erpName}_mapping.csv`, toCsv(mapping), "text/csv")}
-                >
-                  Download CSV
-                </button>
-              </div>
-            )}
-          </div>
-
-          {job.status === "FAILED" && <div className="callout callout--danger">Mapping failed: {job.error}</div>}
-
-          {job.status === "DONE" && (
-            <DataTable
-              columns={columns}
-              rows={mapping}
-              rowKey={(m) => m.erpField}
-              emptyMessage="No fields matched the canonical schema."
-            />
-          )}
-
-          {isRunning && <div className="callout callout--info">Mapping in progress — this can take up to a minute.</div>}
-
-          {job.status === "DONE" && mapping.length > 0 && (
-            <div className="stack">
-              <h2>Approve &amp; implement</h2>
-              <p className="hint">
-                Review the mapping above first. Approving hands it as-is to the adapter-codegen service, which implements the
-                adapter and opens a pull request — nothing re-checks it, so fix anything wrong before approving.
-              </p>
-              <div className="actions">
-                <button
-                  className="erp-btn erp-btn--primary"
-                  type="button"
-                  disabled={approve.isPending || runEnabled}
-                  onClick={async () => {
-                    await approve.mutateAsync({ jobId });
-                    setApproved(true);
-                  }}
-                >
-                  {approve.isPending ? "Approving…" : runEnabled ? "Approved" : "Approve & implement"}
-                </button>
-              </div>
-              {run && (
-                <div className="callout callout--info">
-                  Adapter run: <StatusBadge status={statusLabel(run.status)} />
-                  {run.status === "FAILED" && <> — {run.error}</>}
-                  {run.status === "DONE" && (
-                    <>
-                      {" "}
-                      — branch <code>{run.branch}</code>{" "}
-                      {run.prUrl && (
-                        <a href={run.prUrl} target="_blank" rel="noreferrer">
-                          open pull request
-                        </a>
-                      )}
-                    </>
-                  )}
-                </div>
+      <section className="panel stack">
+        <div className="pagehead">
+          <div>
+            <h2>2. Review the proposal</h2>
+            <p className="hint">
+              {job ? (
+                <>
+                  {job.erpName} · <StatusBadge status={statusLabel(job.status)} />
+                </>
+              ) : (
+                "Nothing proposed yet."
               )}
+            </p>
+          </div>
+          {job?.status === "DONE" && mapping.length > 0 && (
+            <div className="actions">
+              <button
+                className="erp-btn erp-btn--ghost erp-btn--sm"
+                type="button"
+                onClick={() => downloadBlob(`${job.erpName}_mapping.json`, JSON.stringify(mapping, null, 2), "application/json")}
+              >
+                Download JSON
+              </button>
+              <button
+                className="erp-btn erp-btn--ghost erp-btn--sm"
+                type="button"
+                onClick={() => downloadBlob(`${job.erpName}_mapping.csv`, toCsv(mapping), "text/csv")}
+              >
+                Download CSV
+              </button>
             </div>
           )}
         </div>
-      )}
+        {isRunning && <div className="callout callout--info">Mapping in progress. This can take up to a minute.</div>}
+        {job?.status === "FAILED" && <div className="callout callout--danger">Mapping failed: {job.error}</div>}
+        {job?.status === "DONE" && (
+          <DataTable
+            columns={columns}
+            rows={mapping}
+            rowKey={(m) => m.erpField}
+            emptyMessage="No fields matched the canonical schema."
+          />
+        )}
+      </section>
+
+      <section className="panel stack">
+        <h2>3. Approve and generate the adapter</h2>
+        <p className="hint">
+          This is the gate. Approving sends the mapping above, unchanged, to the code generator. It writes the adapter and
+          opens a pull request. Fix a wrong row before you approve. There is no second check.
+        </p>
+        <div className="actions">
+          <button
+            className="erp-btn erp-btn--primary"
+            type="button"
+            disabled={!jobId || job?.status !== "DONE" || mapping.length === 0 || approve.isPending || runEnabled}
+            onClick={async () => {
+              if (!jobId) return;
+              await approve.mutateAsync({ jobId });
+              setApproved(true);
+            }}
+          >
+            {approve.isPending ? "Approving…" : runEnabled ? "Approved" : "Approve and generate code"}
+          </button>
+        </div>
+        {job?.status !== "DONE" && <p className="hint">The button stays off until a proposal is ready to review.</p>}
+        {run && (
+          <div className="callout callout--info">
+            Code generation: <StatusBadge status={statusLabel(run.status)} />
+            {run.status === "FAILED" && <> — {run.error}</>}
+            {run.status === "DONE" && (
+              <>
+                {" "}
+                — branch <code>{run.branch}</code>{" "}
+                {run.prUrl && (
+                  <a href={run.prUrl} target="_blank" rel="noreferrer">
+                    open pull request
+                  </a>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </section>
     </>
   );
 }

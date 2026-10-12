@@ -1,10 +1,9 @@
-import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { InfoTag } from "../../components/InfoTag";
 import { OrderTimeline } from "../../components/OrderTimeline";
 import { StatusBadge } from "../../components/StatusBadge";
-import { useOperatorOrder, useSetVendorDate } from "../../hooks/useAdmin";
+import { useOperatorOrder } from "../../hooks/useAdmin";
 import { formatMoney } from "../../lib/money";
 import { statusLabel } from "../../lib/statusLabel";
 
@@ -14,22 +13,10 @@ export function OrderDetailPage() {
   const { orderId = "" } = useParams();
   const navigate = useNavigate();
   const { data: order, isLoading, error } = useOperatorOrder(orderId);
-  const setVendorDate = useSetVendorDate(orderId);
-
-  const [vendor, setVendor] = useState({ lineId: "", vendorDate: "" });
 
   if (isLoading) return <p className="muted">Loading…</p>;
   if (error) return <div className="callout callout--danger">Could not load order: {error.message}</div>;
   if (!order) return <p className="muted">Order not found.</p>;
-
-  async function submitVendorDate(e: FormEvent) {
-    e.preventDefault();
-    if (!vendor.lineId || !vendor.vendorDate) return;
-    await setVendorDate.mutateAsync({ orderId, lineId: vendor.lineId, vendorDate: vendor.vendorDate });
-    setVendor({ lineId: "", vendorDate: "" });
-  }
-
-  const recordable = order.status === "CONFIRMED" || order.status === "CLOSED";
 
   return (
     <>
@@ -64,7 +51,6 @@ export function OrderDetailPage() {
                     <th className="num">Shipped</th>
                     <th className="num">Delivered</th>
                     <th className="num">Invoiced</th>
-                    <th>Scheduled</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -78,7 +64,6 @@ export function OrderDetailPage() {
                       <td className="num">{line.shippedQuantity}</td>
                       <td className="num">{line.deliveredQuantity}</td>
                       <td className="num">{line.invoicedQuantity}</td>
-                      <td className="mono">{line.scheduledDate ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -87,43 +72,13 @@ export function OrderDetailPage() {
                     <tr>
                       <td colSpan={4}>Subtotal</td>
                       <td className="num">{formatMoney(order.subtotal)}</td>
-                      <td colSpan={4}></td>
+                      <td colSpan={3}></td>
                     </tr>
                   </tfoot>
                 )}
               </table>
             </div>
           </section>
-
-          {recordable && (
-            <section className="panel stack">
-              <h2>Scheduled date</h2>
-              <form className="grid2" onSubmit={submitVendorDate}>
-                <div className="field">
-                  <label htmlFor="vendor-line">
-                    Vendor date <InfoTag text="When purchasing bought the line from the maker — this is what 'scheduled' means." />
-                  </label>
-                  <select className="input" id="vendor-line" value={vendor.lineId} onChange={(e) => setVendor({ ...vendor, lineId: e.target.value })} required>
-                    <option value="">Select a line</option>
-                    {order.lines.map((l) => (
-                      <option key={l.lineId} value={l.lineId}>
-                        {l.productKey}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="field">
-                  <label htmlFor="vendor-date">Date</label>
-                  <input className="input" id="vendor-date" type="date" value={vendor.vendorDate} onChange={(e) => setVendor({ ...vendor, vendorDate: e.target.value })} required />
-                </div>
-                <div className="actions">
-                  <button className="erp-btn erp-btn--secondary" type="submit" disabled={setVendorDate.isPending}>
-                    {setVendorDate.isPending ? "Saving…" : "Set scheduled date"}
-                  </button>
-                </div>
-              </form>
-            </section>
-          )}
 
           <section className="panel">
             <h2>ERP identity</h2>

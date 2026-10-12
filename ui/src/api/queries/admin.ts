@@ -203,9 +203,3 @@ export const NOTIFICATIONS_QUERY = /* GraphQL */ `
     }
   }
 `;
-
-export const SET_VENDOR_DATE_MUTATION = /* GraphQL */ `
-  mutation SetVendorDate($orderId: String!, $lineId: String!, $vendorDate: String!) {
-    setVendorDate(orderId: $orderId, lineId: $lineId, vendorDate: $vendorDate)
-  }
-`;

@@ -59,7 +59,6 @@ export function OrderDetailPage() {
                     <th className="num">Line total</th>
                     <th className="num">Shipped</th>
                     <th className="num">Delivered</th>
-                    <th>Scheduled</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -73,7 +72,6 @@ export function OrderDetailPage() {
                       <td className="num">{formatMoney(line.lineTotal)}</td>
                       <td className="num">{line.shippedQuantity}</td>
                       <td className="num">{line.deliveredQuantity}</td>
-                      <td className="mono">{line.scheduledDate ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -82,7 +80,7 @@ export function OrderDetailPage() {
                     <tr>
                       <td colSpan={5}>Subtotal</td>
                       <td className="num">{formatMoney(order.subtotal)}</td>
-                      <td colSpan={3}></td>
+                      <td colSpan={2}></td>
                     </tr>
                   </tfoot>
                 )}

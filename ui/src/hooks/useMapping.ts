@@ -5,6 +5,7 @@ import {
   ADAPTER_RUN_QUERY,
   APPROVE_MAPPING_MUTATION,
   CANONICAL_SCHEMAS_QUERY,
+  MAPPING_JOBS_QUERY,
   MAPPING_JOB_QUERY,
   REGISTER_CANONICAL_SCHEMA_MUTATION,
   SUBMIT_MAPPING_MUTATION,
@@ -60,6 +61,7 @@ export function useRegisterCanonicalSchema() {
 
 export function useSubmitMapping() {
   const { idToken } = useAuth();
+  const queryClient = useQueryClient();
   const { notify } = useToast();
   return useMutation({
     mutationFn: (input: {
@@ -77,7 +79,24 @@ export function useSubmitMapping() {
           canonicalFieldsCsv?: string | null;
         }
       >("operator", SUBMIT_MAPPING_MUTATION, input, idToken).then((d) => d.submitMapping),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mappingJobs"] });
+    },
     onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
+export function useMappingJobs() {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["mappingJobs"],
+    queryFn: () =>
+      graphqlRequest<{ mappingJobs: MappingJob[] }>("operator", MAPPING_JOBS_QUERY, {}, idToken).then(
+        (d) => d.mappingJobs,
+      ),
+    enabled: isAuthenticated,
+    refetchInterval: (query) =>
+      query.state.data?.some((job) => !isTerminal(job.status)) ? POLL_MS : false,
   });
 }
 
@@ -110,6 +129,7 @@ export function useApproveMapping() {
       >("operator", APPROVE_MAPPING_MUTATION, input, idToken).then((d) => d.approveMapping),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["adapterRun", variables.jobId] });
+      queryClient.invalidateQueries({ queryKey: ["mappingJobs"] });
       notify("Mapping approved — the adapter is being implemented.");
     },
     onError: (err) => notify((err as Error).message, "danger"),

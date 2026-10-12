@@ -97,6 +97,9 @@ class MappingService:
     def get_job(self, job_id: str) -> MappingJob | None:
         return self._jobs.get(job_id)
 
+    def list_jobs(self, limit: int = 50) -> list[MappingJob]:
+        return self._jobs.list_recent(limit)
+
     # --- approve -> adapter run ---
     def approve(self, job_id: str) -> MappingJob:
         """Hand the reviewed mapping to the adapter-codegen service. The mapping is treated

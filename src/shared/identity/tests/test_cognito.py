@@ -67,7 +67,7 @@ def _access_token(**overrides: object) -> str:
         "token_use": "access",
         "exp": int(time.time()) + 3600,
         "client_id": _CLIENT_ID,
-        "scope": "erp-portal/tenant.tnt_demo erp-portal/role.RESELLER",
+        "scope": "o2c/tenant.tnt_demo o2c/role.RESELLER",
     }
     claims.update(overrides)
     return jwt.encode(claims, _PRIVATE_KEY, algorithm="RS256")
@@ -157,13 +157,13 @@ def test_access_token_wrong_client_id_is_rejected() -> None:
 
 
 def test_access_token_with_no_tenant_scope_is_rejected() -> None:
-    token = _access_token(scope="erp-portal/role.RESELLER")  # no tenant.* scope at all
+    token = _access_token(scope="o2c/role.RESELLER")  # no tenant.* scope at all
     assert _provider().authenticate(_headers(token)) is None
 
 
 def test_access_token_with_two_tenant_scopes_is_rejected_not_guessed() -> None:
     """Ambiguous — which tenant does this client act as? Reject rather than pick one."""
-    token = _access_token(scope="erp-portal/tenant.tnt_demo erp-portal/tenant.tnt_other")
+    token = _access_token(scope="o2c/tenant.tnt_demo o2c/tenant.tnt_other")
     assert _provider().authenticate(_headers(token)) is None
 
 
@@ -175,16 +175,14 @@ def test_access_token_scope_from_a_different_resource_server_is_ignored() -> Non
 
 
 def test_access_token_with_multiple_role_scopes_captures_all_of_them() -> None:
-    token = _access_token(
-        scope="erp-portal/tenant.tnt_demo erp-portal/role.RESELLER erp-portal/role.BILLING"
-    )
+    token = _access_token(scope="o2c/tenant.tnt_demo o2c/role.RESELLER o2c/role.BILLING")
     principal = _provider().authenticate(_headers(token))
     assert principal is not None
     assert principal.roles == ("RESELLER", "BILLING")
 
 
 def test_access_token_with_no_role_scopes_means_no_roles_not_a_rejection() -> None:
-    token = _access_token(scope="erp-portal/tenant.tnt_demo")
+    token = _access_token(scope="o2c/tenant.tnt_demo")
     principal = _provider().authenticate(_headers(token))
     assert principal is not None
     assert principal.roles == ()

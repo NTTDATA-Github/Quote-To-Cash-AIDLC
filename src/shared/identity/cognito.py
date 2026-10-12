@@ -61,7 +61,7 @@ class CognitoIdentityProvider:
         user_pool_id: str,
         client_id: str,
         issuer: str,
-        resource_server_id: str = "erp-portal",
+        resource_server_id: str = "o2c",
         jwk_client: PyJWKClient | None = None,
     ) -> None:
         self._client_id = client_id

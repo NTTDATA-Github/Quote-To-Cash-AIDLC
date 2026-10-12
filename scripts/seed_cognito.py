@@ -13,7 +13,7 @@ from pathlib import Path
 
 import boto3
 
-_POOL = "erp-portal-local"
+_POOL = "o2c-local"
 _PASSWORD = "DemoPass123!"
 
 

@@ -84,7 +84,7 @@ def get_settings() -> Settings:
         worker_roles=_parse_worker_roles(os.environ.get("WORKER_ROLE", "all")),
         cognito_user_pool_id=os.environ.get("COGNITO_USER_POOL_ID"),
         cognito_client_id=os.environ.get("COGNITO_CLIENT_ID"),
-        cognito_resource_server_id=os.environ.get("COGNITO_RESOURCE_SERVER_ID", "erp-portal"),
+        cognito_resource_server_id=os.environ.get("COGNITO_RESOURCE_SERVER_ID", "o2c"),
         cors_allowed_origins=[
             origin.strip()
             for origin in os.environ.get(

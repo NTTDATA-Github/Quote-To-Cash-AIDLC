@@ -26,6 +26,7 @@ under a minute.
 | [0017](0017-module-grouping-and-fulfillment-split.md) | Group modules by subdomain (`sales`/`reference`/`integration`); split `fulfillment` into `shipment` and `invoicing` (`payments`/`returns` later removed) | Accepted (amended) |
 | [0018](0018-shipment-invoice-order-saga.md) | Shipment/invoice → order is an event-driven saga, not a cross-aggregate transaction | Accepted (supersedes FR-A4's atomic guarantee) |
 | [0019](0019-order-routing.md) | An existing ERP order is routed by the connection being read and the verified binding on it | Accepted |
+| [0020](0020-terraform-aws-deploy-and-cicd.md) | Terraform + AWS (single `staging` env, public for debugging) provisioned from GitHub Actions over OIDC | Accepted |
 
 ## How to read one
 

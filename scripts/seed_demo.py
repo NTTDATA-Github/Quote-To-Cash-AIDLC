@@ -3,11 +3,11 @@
 One Odoo connection and a verified binding. Sales orders are read from Odoo for that
 partner; this app does not create them.
 
-The binding's erp_customer_id is Odoo's res.partner id (an integer). Partner 1 is the
-contact created with the database. The subsidiary's erp_company_id is Odoo's res.company
-id. Company 1 is the company created with the database. A product line is followed only
-when its Internal Reference is set. A quotation whose company id is not recorded on a
-subsidiary is not adopted.
+The binding's erp_customer_id is Odoo's res.partner id (an integer). Partner 10 is
+Acme Retail, the reseller's customer record in this demo database. The subsidiary's
+erp_company_id is Odoo's res.company id. Company 1 is Northstar Distribution. A product
+line is followed only when its Internal Reference is set. A quotation whose company id
+is not recorded on a subsidiary is not adopted.
 
 Usage:
     DATABASE_URL=postgresql+psycopg2://portal:portal@localhost:5432/portal \\
@@ -47,15 +47,15 @@ _STATEMENTS = [
         INSERT INTO tenant_connection_bindings
             (binding_id, tenant_id, connection_id, erp_customer_id, status)
         VALUES
-            ('bind_demo', 'tnt_demo', 'conn_odoo_local', '1', 'VERIFIED')
+            ('bind_demo', 'tnt_demo', 'conn_odoo_local', '10', 'VERIFIED')
         ON CONFLICT (binding_id) DO UPDATE SET erp_customer_id = EXCLUDED.erp_customer_id
         """
     ),
     text(
         """
         INSERT INTO subsidiaries (subsidiary_id, name, country, language)
-        VALUES ('sub_demo', 'Demo subsidiary', 'US', 'en_US')
-        ON CONFLICT (subsidiary_id) DO NOTHING
+        VALUES ('sub_demo', 'Northstar Distribution', 'US', 'en_US')
+        ON CONFLICT (subsidiary_id) DO UPDATE SET name = EXCLUDED.name
         """
     ),
     text(

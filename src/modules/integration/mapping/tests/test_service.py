@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from src.modules.integration.mapping.application.processing import process_pending_jobs
@@ -106,3 +108,21 @@ def test_claim_pending_marks_processing_and_respects_limit() -> None:
     remaining = jobs.claim_pending(limit=5)
     assert len(remaining) == 1
     assert remaining[0].job_id == ids[2]
+
+
+def test_list_jobs_keeps_every_erp_newest_first() -> None:
+    jobs = InMemoryMappingJobRepository()
+    svc = MappingService(jobs, InMemoryCanonicalSchemaRepository(), StubAdapterRunLauncher())
+    first = svc.submit_job(erp_name="NetSuite", sample_files=_SAMPLE, canonical_fields_csv=_CSV)
+    second = svc.submit_job(
+        erp_name="SAP",
+        sample_files={"orders.csv": _SAMPLE["orders.csv"], "invoices.csv": "INVOICE_ID\n9\n"},
+        canonical_fields_csv=_CSV,
+    )
+    first.created_at = datetime(2026, 1, 1, tzinfo=UTC)
+    second.created_at = datetime(2026, 1, 2, tzinfo=UTC)
+    jobs.update(first)
+    jobs.update(second)
+    listed = svc.list_jobs()
+    assert [job.erp_name for job in listed] == ["SAP", "NetSuite"]
+    assert set(listed[0].sample_exports) == {"orders.csv", "invoices.csv"}

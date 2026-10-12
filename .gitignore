@@ -32,6 +32,9 @@ Thumbs.db
 # Local process logs and pids (scripts/local.sh)
 .local/
 
+# Terraform provider binaries (keep .terraform.lock.hcl)
+.terraform/
+
 # Temp
 *.log
 smoke_results.txt

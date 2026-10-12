@@ -1,5 +1,5 @@
 [project]
-name = "erp-portal"
+name = "order-to-cash-connector"
 version = "0.1.0"
 description = "ERP & Supply Chain Order Portal — event-sourced, AWS-native, multi-tenant order routing."
 requires-python = ">=3.11"

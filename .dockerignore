@@ -1,0 +1,21 @@
+# Keep the build context small and free of local state / secrets.
+.git
+.github
+.venv
+.hypothesis
+.pytest_cache
+.ruff_cache
+.import_linter_cache
+.local
+**/__pycache__
+**/*.pyc
+ui/node_modules
+ui/dist
+aidlc-docs
+docs
+design
+infra
+*.docx
+*.html
+.env
+.env.*

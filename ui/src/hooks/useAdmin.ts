@@ -16,7 +16,6 @@ import {
   REMOVE_BINDING_MUTATION,
   RESUME_CONNECTION_MUTATION,
   SET_ERP_ROUTE_MUTATION,
-  SET_VENDOR_DATE_MUTATION,
   VERIFY_BINDING_MUTATION,
   type Binding,
   type Connection,
@@ -230,21 +229,6 @@ export function useCreateSubsidiary() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["subsidiaries"] });
       notify("Subsidiary created.");
-    },
-    onError: (err) => notify((err as Error).message, "danger"),
-  });
-}
-
-export function useSetVendorDate(orderId: string) {
-  const { idToken } = useAuth();
-  const queryClient = useQueryClient();
-  const { notify } = useToast();
-  return useMutation({
-    mutationFn: (input: { orderId: string; lineId: string; vendorDate: string }) =>
-      graphqlRequest("operator", SET_VENDOR_DATE_MUTATION, input, idToken),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["operatorOrder", orderId] });
-      notify("Vendor date set (scheduled).");
     },
     onError: (err) => notify((err as Error).message, "danger"),
   });

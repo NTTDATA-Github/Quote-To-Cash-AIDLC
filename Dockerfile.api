@@ -1,0 +1,36 @@
+# API host — FastAPI (GraphQL + inbound ERP webhooks + health).
+# Pinned base, non-root, no `latest`. Same image shape as Dockerfile.worker; only the
+# CMD differs (the app is a modular monolith — one wheel, two process roles).
+FROM python:3.11-slim AS base
+
+# psycopg2-binary ships wheels, but keep the toolchain out of the final image anyway.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# curl is used by the container HEALTHCHECK against /livez.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install deps first (better layer caching), then the source.
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY migrations ./migrations
+COPY alembic.ini ./
+RUN pip install .
+
+# Run as a non-root user.
+RUN useradd --create-home --uid 10001 appuser
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/livez || exit 1
+
+# 0.0.0.0 so the ALB/host can reach it (inside the container network only).
+CMD ["python", "-m", "uvicorn", "src.api.app:app", "--host", "0.0.0.0", "--port", "8000"]

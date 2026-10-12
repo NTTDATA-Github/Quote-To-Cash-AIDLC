@@ -48,13 +48,13 @@ except Exception as exc:  # pragma: no cover - environment-dependent
 @pytest.fixture(scope="module")
 def pool_and_token() -> tuple[str, str, str, str]:
     pool = _cognito.create_user_pool(
-        PoolName=f"erp-portal-test-{uuid.uuid4().hex[:8]}",
+        PoolName=f"o2c-test-{uuid.uuid4().hex[:8]}",
         Schema=[{"Name": "tenant_id", "AttributeDataType": "String", "Mutable": True}],
     )
     pool_id = pool["UserPool"]["Id"]
     client = _cognito.create_user_pool_client(
         UserPoolId=pool_id,
-        ClientName="erp-portal-test-client",
+        ClientName="o2c-test-client",
         ExplicitAuthFlows=["ALLOW_ADMIN_USER_PASSWORD_AUTH", "ALLOW_REFRESH_TOKEN_AUTH"],
     )
     client_id = client["UserPoolClient"]["ClientId"]

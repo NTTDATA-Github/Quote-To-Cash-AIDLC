@@ -8,7 +8,9 @@
 .side { width: 232px; flex: none; padding: var(--space-4); background: var(--surface-raised); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: var(--space-6); }
 .brandmark { padding: 0 var(--space-2); font: 600 16px/24px var(--font-sans); }
 .role { padding: 0 var(--space-2); color: var(--ink-muted); font: 600 12px/16px var(--font-sans); letter-spacing: 0.04em; text-transform: uppercase; }
-.nav { display: flex; flex-direction: column; gap: 2px; }
+.nav { display: flex; flex-direction: column; gap: var(--space-4); }
+.nav-group { display: flex; flex-direction: column; gap: 2px; }
+.nav-label { padding: 0 var(--space-2); color: var(--ink-muted); font: 600 11px/16px var(--font-sans); letter-spacing: 0.04em; text-transform: uppercase; }
 .nav-item { display: flex; align-items: center; height: 32px; padding: 0 var(--space-2); border-radius: var(--radius-md); color: var(--ink); text-decoration: none; font: 400 14px/20px var(--font-sans); }
 .nav-item:hover { background: var(--surface-sunken); }
 .nav-item:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
@@ -44,7 +46,8 @@ textarea.input { height: auto; padding: var(--space-2) var(--space-3); }
 .checks { display: flex; flex-direction: column; gap: var(--space-2); }
 
 .panel { padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); display: flex; flex-direction: column; gap: var(--space-3); }
-.panel > h2 { margin: 0; font: 600 16px/24px var(--font-sans); }
+.panel > h2, .panel > h3 { margin: 0; font: 600 16px/24px var(--font-sans); }
+.panel > h3 { font: 600 14px/20px var(--font-sans); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .panel-head h2 { margin: 0; font: 600 16px/24px var(--font-sans); }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); align-items: start; }
@@ -72,6 +75,7 @@ textarea.input { height: auto; padding: var(--space-2) var(--space-3); }
 .opt { display: flex; gap: var(--space-3); align-items: flex-start; padding: var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-raised); }
 .opt.is-selected { border-color: var(--brand); background: var(--brand-soft); }
 .opt input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--brand); }
+.erp-table tr.is-selected td { background: var(--brand-soft); }
 .erp-table td a { color: var(--brand); text-decoration: none; font-weight: 600; }
 .erp-table td a:hover { text-decoration: underline; }
 
