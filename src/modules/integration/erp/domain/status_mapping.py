@@ -38,10 +38,34 @@ def _map_odoo(fields: dict[str, str]) -> CanonicalStatus | None:
     return None
 
 
+def _map_sap(fields: dict[str, str]) -> CanonicalStatus | None:
+    """Reads the three header fields `sap_adapter.fetch_status` returns.
+
+    ASSUMPTION, from SAP's public `API_SALES_ORDER_SRV` documentation, to be verified
+    against a real account's `$metadata` before trusting in production: these mirror the
+    classic SD document status concept (processing / billing / rejection status,
+    historically VBUK-GBSTK/FKSTK/ABSTK) that SAP's public OData API exposes on
+    `A_SalesOrder` under the field names read in `sap_adapter.fetch_status`. Not an
+    account-specific unknown — this is a reasoned default built from SAP's own
+    documented API shape, not a guess at this account's own configuration.
+    """
+    rejection = fields.get("overall_sd_document_rejection_status", "")
+    billing = fields.get("overall_billing_status", "")
+    processing = fields.get("overall_sd_process_status", "")
+    if rejection == "c":  # completely rejected
+        return CanonicalStatus.CANCELLED
+    if billing == "c":  # completely invoiced
+        return CanonicalStatus.CLOSED
+    if processing in ("a", "b", "c"):  # order exists and isn't fully rejected/invoiced
+        return CanonicalStatus.CONFIRMED
+    return None
+
+
 # The one place a new ERP's status mapping is registered. Keyed by the same string an
 # `ErpConnection.erp_type`/`ErpTarget.erp_type` carries (upper-cased).
 STATUS_MAPPERS: dict[str, StatusMapper] = {
     "ODOO": _map_odoo,
+    "SAP": _map_sap,
 }
 
 

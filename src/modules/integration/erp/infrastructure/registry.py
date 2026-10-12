@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .odoo_adapter import OdooAdapter
+from .sap_adapter import SapAdapter
 
 if TYPE_CHECKING:
     from src.shared.config import Settings
@@ -29,4 +30,5 @@ def build_adapter_registry(settings: Settings) -> dict[str, ErpAdapter]:
     reconstructing an HTTP-client-equivalent on every delivery/reconcile call)."""
     return {
         "ODOO": OdooAdapter(timeout_seconds=settings.erp_odoo_timeout_seconds),
+        "SAP": SapAdapter(timeout_seconds=settings.erp_sap_timeout_seconds),
     }
