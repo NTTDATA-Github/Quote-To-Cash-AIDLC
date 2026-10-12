@@ -117,6 +117,19 @@ variable "task_memory" {
   default     = 1024
 }
 
+variable "odoo_image" {
+  description = "Full ECR image ref for Odoo (repo:tag). Empty uses <registry>/o2c/odoo:bootstrap."
+  type        = string
+  default     = ""
+}
+
+variable "odoo_db_password" {
+  description = "Password for the Odoo RDS user. Supply via TF_VAR_odoo_db_password (never commit it). Not the Aurora password."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "odoo_secret_value" {
   description = "Initial Odoo connection secret JSON stored in Secrets Manager. Supply via TF_VAR_odoo_secret_value; empty = placeholder."
   type        = string

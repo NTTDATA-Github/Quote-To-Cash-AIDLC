@@ -16,14 +16,19 @@ aurora_max_acu       = 4
 api_desired_count    = 1
 worker_desired_count = 1
 
-# ERP dispatch: "stub" is safe until a real Odoo connection + secret are configured.
+# ERP dispatch: "stub" until Odoo is up and the connection points at it.
+# Then set this to "real" and apply again.
 erp_adapter_mode = "stub"
+
+# Odoo image and its RDS password are NOT stored here.
+#   export TF_VAR_odoo_db_password='...'
+#   -var="odoo_image=<ECR>/o2c/odoo:<tag>"   (optional; default is :bootstrap)
 
 # UI origin(s). Set to the deployed UI URL; "*" is permissive for early debugging.
 cors_allowed_origins = "*"
 
 # Set to "owner/repo" to create the GitHub Actions OIDC deploy role (recommended).
-github_oidc_repo = ""
+github_oidc_repo = "sridarsaikrishnan/AI-DLC-ERP-Supply-Chain-Order-Portal"
 
 # Supply these at apply time via environment, NEVER in this file:
 #   export TF_VAR_db_password=...            (Aurora master password)

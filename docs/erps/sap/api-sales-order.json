@@ -1,0 +1,13 @@
+[
+  {
+    "SalesOrder": "5000010",
+    "SalesOrderItem": "000010",
+    "SoldToParty": "10100001",
+    "PurchaseOrderByCustomer": "PO-1001",
+    "Material": "TG11",
+    "RequestedQuantity": "5",
+    "RequestedQuantityUnit": "EA",
+    "NetAmount": "750.00",
+    "TransactionCurrency": "USD"
+  }
+]

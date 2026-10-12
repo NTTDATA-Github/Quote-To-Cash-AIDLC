@@ -21,9 +21,14 @@ import os
 
 from sqlalchemy import create_engine, text
 from src.shared.secrets.aws import SecretsManagerSecretStore
+from src.shared.secrets.store import SecretNotFound
 
 _LOGIN_SECRET = "local:odoo-admin-secret"
 _WEBHOOK_SECRET = "local:odoo-webhook-demo-secret"
+# Floci drops secrets on restart. Registration shows the real signing secret once and
+# does not keep a copy. The local receiver does not check signatures.
+# ponytail: one shared stand-in; persist the generated secret if a receiver must verify it.
+_OUTBOUND_WEBHOOK_SECRET = "whsec_local_dev"
 
 _STATEMENTS = [
     text(
@@ -70,7 +75,7 @@ _STATEMENTS = [
 ]
 
 
-def _put_secrets() -> None:
+def _put_secrets(outbound_refs: list[str]) -> None:
     endpoint = os.environ.get("AWS_ENDPOINT_URL")
     if not endpoint:
         print("AWS_ENDPOINT_URL is unset — Odoo login secret was not stored")
@@ -80,6 +85,15 @@ def _put_secrets() -> None:
     )
     store.put_secret(_LOGIN_SECRET, "admin")
     store.put_secret(_WEBHOOK_SECRET, "odoo-webhook-demo")
+    restored = 0
+    for secret_ref in outbound_refs:
+        try:
+            store.get_secret(secret_ref)
+        except SecretNotFound:
+            store.put_secret(secret_ref, _OUTBOUND_WEBHOOK_SECRET)
+            restored += 1
+    if restored:
+        print(f"restored {restored} outbound webhook signing secret(s)")
 
 
 def main() -> None:
@@ -92,7 +106,10 @@ def main() -> None:
         connection.execute(_STATEMENTS[0], params)
         for statement in _STATEMENTS[1:]:
             connection.execute(statement)
-    _put_secrets()
+        outbound_refs = [
+            row[0] for row in connection.execute(text("SELECT secret_ref FROM webhook_endpoints"))
+        ]
+    _put_secrets(outbound_refs)
     print("demo data seeded (connection, binding, subsidiary)")
 
 

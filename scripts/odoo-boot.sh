@@ -1,5 +1,5 @@
 #!/bin/bash
-# Install sale_management once. Later starts only boot the server.
+# Install Sales, Inventory, and Invoicing once. Later starts only boot the server.
 # Re-running -i on every container start reinstalls modules and can fail.
 set -e
 code=0
@@ -25,13 +25,13 @@ row = cur.fetchone()
 sys.exit(0 if row and row[0] == "installed" else 10)
 PY
 if [[ "$code" -eq 10 ]]; then
-  /entrypoint.sh odoo -d odoo -i base,contacts,sale_management --stop-after-init
+  /entrypoint.sh odoo -d odoo -i base,contacts,sale_management,stock,sale_stock --stop-after-init
 elif [[ "$code" -ne 0 ]]; then
   exit "$code"
 fi
 
-# A plain module install leaves internal users out of Sales, so sale.order
-# reads fail. Grant Sales / Administrator to every internal user on boot.
+# A plain module install leaves internal users out of Sales and Invoicing, so
+# sale.order reads fail. Grant those rights, and Inventory when it is installed.
 /entrypoint.sh odoo shell -d odoo --no-http \
   --db_host="${HOST:-odoo-db}" \
   --db_user="${USER:-odoo}" \
@@ -40,6 +40,8 @@ groups = [
     env.ref("sales_team.group_sale_manager"),
     env.ref("account.group_account_manager"),
 ]
+if env["ir.module.module"].search([("name", "=", "stock"), ("state", "=", "installed")], limit=1):
+    groups.append(env.ref("stock.group_stock_manager"))
 internals = env["res.users"].search([("share", "=", False)])
 missing_groups = [(user, group) for user in internals for group in groups if group not in user.groups_id]
 for user, group in missing_groups:
@@ -48,4 +50,4 @@ if missing_groups:
     env.cr.commit()
 PY
 
-exec /entrypoint.sh odoo -d odoo
+exec /entrypoint.sh odoo -d odoo --proxy-mode

@@ -52,7 +52,7 @@ export function OrdersPage() {
         />
       </div>
       {error && <div className="callout callout--danger">Could not load orders: {error.message}</div>}
-      <DataTable columns={columns} rows={filtered} rowKey={(o) => o.orderId} emptyMessage={isLoading ? "Loading…" : "No orders yet"} />
+      <DataTable columns={columns} rows={filtered} rowKey={(o) => o.orderId} isLoading={isLoading} emptyMessage="No orders yet" />
     </>
   );
 }

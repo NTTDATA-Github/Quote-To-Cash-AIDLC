@@ -1,0 +1,11 @@
+# Odoo 17 for staging. The boot script installs Sales, Inventory, and Invoicing
+# on an empty database, then serves on 8069. Postgres is RDS, not this image.
+FROM odoo:17
+
+USER root
+COPY scripts/odoo-boot.sh /odoo-boot.sh
+RUN chmod 755 /odoo-boot.sh && sed -i 's/\r$//' /odoo-boot.sh
+USER odoo
+
+EXPOSE 8069
+ENTRYPOINT ["/bin/bash", "/odoo-boot.sh"]

@@ -16,6 +16,14 @@ resource "aws_ecr_repository" "worker" {
   }
 }
 
+resource "aws_ecr_repository" "odoo" {
+  name                 = "${var.name_prefix}/odoo"
+  image_tag_mutability = "IMMUTABLE"
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
 resource "aws_ecr_lifecycle_policy" "api" {
   repository = aws_ecr_repository.api.name
   policy = jsonencode({
@@ -35,5 +43,10 @@ resource "aws_ecr_lifecycle_policy" "api" {
 
 resource "aws_ecr_lifecycle_policy" "worker" {
   repository = aws_ecr_repository.worker.name
+  policy     = aws_ecr_lifecycle_policy.api.policy
+}
+
+resource "aws_ecr_lifecycle_policy" "odoo" {
+  repository = aws_ecr_repository.odoo.name
   policy     = aws_ecr_lifecycle_policy.api.policy
 }

@@ -13,6 +13,12 @@ models means a cross-region inference profile id (the `us.`/`global.` prefix).
 
 from __future__ import annotations
 
+import json
+import os
+import urllib.error
+import urllib.request
+from urllib.parse import quote
+
 import boto3
 
 _MAX_TOKENS = 4096
@@ -26,15 +32,61 @@ class BedrockLlmClient:
 
     def _runtime(self) -> object:
         if self._client is None:
+            # No endpoint_url: in prod there is no AWS_ENDPOINT_URL, so this is real Bedrock.
+            # Locally that variable points every boto3 client at Floci, which stubs this call.
             self._client = boto3.client("bedrock-runtime", region_name=self._region_name)
         return self._client
 
     def ask(self, system: str, user: str, max_tokens: int = _MAX_TOKENS) -> str:
+        token = os.environ.get("AWS_BEARER_TOKEN_BEDROCK", "").strip()
+        if token:
+            # Bearer auth goes to the real Converse endpoint. The dummy local AWS keys
+            # cannot sign that request, and AWS_ENDPOINT_URL would send boto3 to Floci.
+            return self._ask_bearer(token, system, user, max_tokens)
+        if os.environ.get("AWS_ENDPOINT_URL"):
+            raise RuntimeError(
+                "AWS_ENDPOINT_URL sends Bedrock to the local emulator, which returns a stub "
+                "instead of a mapping. Set AWS_BEARER_TOKEN_BEDROCK to call the real Converse API."
+            )
         response = self._runtime().converse(  # type: ignore[attr-defined]
             modelId=self._model_id,
             system=[{"text": system}],
             messages=[{"role": "user", "content": [{"text": user}]}],
             inferenceConfig={"maxTokens": max_tokens, "temperature": 0},
         )
-        parts = response["output"]["message"]["content"]
-        return "".join(p.get("text", "") for p in parts).strip()
+        return _text(response)
+
+    def _ask_bearer(self, token: str, system: str, user: str, max_tokens: int) -> str:
+        url = (
+            f"https://bedrock-runtime.{self._region_name}.amazonaws.com"
+            f"/model/{quote(self._model_id, safe='')}/converse"
+        )
+        body = json.dumps(
+            {
+                "system": [{"text": system}],
+                "messages": [{"role": "user", "content": [{"text": user}]}],
+                "inferenceConfig": {"maxTokens": max_tokens, "temperature": 0},
+            }
+        ).encode()
+        request = urllib.request.Request(
+            url,
+            data=body,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                payload = json.load(response)
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(f"Bedrock converse failed: {e.code} {detail}") from e
+        return _text(payload)
+
+
+def _text(response: dict) -> str:  # type: ignore[type-arg]
+    parts = response["output"]["message"]["content"]
+    return "".join(p.get("text", "") for p in parts).strip()

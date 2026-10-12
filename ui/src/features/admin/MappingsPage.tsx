@@ -53,12 +53,12 @@ function toCsv(mapping: MappingEntry[]): string {
 
 export function MappingsPage() {
   const { data: schemas, error: schemasError } = useCanonicalSchemas();
-  const { data: jobs, error: jobsError } = useMappingJobs();
+  const { data: jobs, error: jobsError, isLoading: jobsLoading } = useMappingJobs();
   const registerSchema = useRegisterCanonicalSchema();
   const submit = useSubmitMapping();
   const approve = useApproveMapping();
 
-  const [source, setSource] = useState<Source>("registered");
+  const [source, setSource] = useState<Source>("oneoff");
   const [selectedSchema, setSelectedSchema] = useState("");
   const [newSchemaName, setNewSchemaName] = useState("");
   const [newSchemaCsv, setNewSchemaCsv] = useState("");
@@ -85,6 +85,11 @@ export function MappingsPage() {
     setSampleFiles(read);
   }
 
+  async function loadCsv(e: ChangeEvent<HTMLInputElement>, setCsv: (value: string) => void) {
+    const file = e.target.files?.[0];
+    if (file) setCsv(await file.text());
+  }
+
   async function handleRegister() {
     await registerSchema.mutateAsync({ name: newSchemaName.trim(), csvText: newSchemaCsv });
     setSource("registered");
@@ -106,9 +111,9 @@ export function MappingsPage() {
   }
 
   const columns: Column<MappingEntry>[] = [
-    { key: "erp", header: "ERP field", render: (m) => <span className="id">{m.erpField}</span> },
-    { key: "canonical", header: "Canonical field", render: (m) => m.canonicalField },
-    { key: "sample", header: "Sample value", render: (m) => <span className="muted">{m.sampleData}</span> },
+    { key: "erp", header: "ERP exposed field", render: (m) => <span className="id">{m.erpField}</span> },
+    { key: "canonical", header: "Our order field", render: (m) => m.canonicalField },
+    { key: "sample", header: "Example", render: (m) => <span className="muted">{m.sampleData}</span> },
     {
       key: "confidence",
       header: (
@@ -136,7 +141,7 @@ export function MappingsPage() {
       header: "Input",
       render: (item) => (
         <span>
-          {item.schemaName ?? "Pasted fields"}
+          {item.schemaName ?? "One-off list"}
           {item.sampleFiles.length > 0 ? ` · ${item.sampleFiles.join(", ")}` : ""}
         </span>
       ),
@@ -164,7 +169,9 @@ export function MappingsPage() {
           );
         }
         if (item.jobId === jobId && run) return statusLabel(run.status);
-        return item.adapterRunId ? "Approved" : "—";
+        // Only the selected row's live code-gen status is fetched (it's an external call) —
+        // for every other row we only know a run was started, not whether it's done.
+        return item.adapterRunId ? "Approved — click for status" : "—";
       },
     },
   ];
@@ -175,9 +182,9 @@ export function MappingsPage() {
         <div>
           <h1>ERP mapping</h1>
           <p>
-            Each ERP is its own job. Attach several CSV or JSON files when one ERP has several sheets. A second
-            ERP is a second row. Open a row to review its mapping, then approve it. Approval sends that mapping to
-            the code generator, which writes the adapter and opens a pull request.
+            Match our order fields to the ERP exposed fields. Upload those fields with a few example values, review the
+            proposal, then approve it. Approval sends the mapping to the code generator, which writes the adapter and
+            opens a pull request.
           </p>
         </div>
       </div>
@@ -189,6 +196,7 @@ export function MappingsPage() {
           columns={jobColumns}
           rows={jobs ?? []}
           rowKey={(item) => item.jobId}
+          isLoading={jobsLoading}
           emptyMessage="No mapping jobs yet. Propose one below."
           onRowClick={(item) => {
             setJobId(item.jobId);
@@ -200,44 +208,51 @@ export function MappingsPage() {
 
       <form className="panel stack" onSubmit={handleSubmit}>
         <h2>1. Propose a mapping</h2>
-        <h3>Canonical fields</h3>
-        <div className="actions" role="radiogroup" aria-label="Canonical field source">
+        <h3>Our order fields</h3>
+        <p className="hint">
+          The fields on an order in this app. Two columns, <code>field,description</code>, one field per row. The
+          proposal can only use names from this list.
+        </p>
+        <div className="actions" role="radiogroup" aria-label="Our order fields">
           <label>
-            <input type="radio" name="source" checked={source === "registered"} onChange={() => setSource("registered")} /> Use a
-            registered schema
+            <input type="radio" name="source" checked={source === "oneoff"} onChange={() => setSource("oneoff")} /> Upload or paste
           </label>
           <label>
-            <input type="radio" name="source" checked={source === "oneoff"} onChange={() => setSource("oneoff")} /> Paste a one-off CSV
+            <input type="radio" name="source" checked={source === "registered"} onChange={() => setSource("registered")} /> Saved list
           </label>
           <label>
-            <input type="radio" name="source" checked={source === "new"} onChange={() => setSource("new")} /> Register a new schema
+            <input type="radio" name="source" checked={source === "new"} onChange={() => setSource("new")} /> Save a new list
           </label>
         </div>
 
         {source === "registered" && (
           <div className="field">
-            <label htmlFor="schema">Registered schema</label>
-            <select className="input" id="schema" value={selectedSchema} onChange={(e) => setSelectedSchema(e.target.value)}>
-              <option value="">Choose a schema…</option>
-              {(schemas ?? []).map((s) => (
-                <option key={s.name} value={s.name}>
-                  {s.name} ({s.fieldCount} fields)
-                </option>
-              ))}
-            </select>
+            <label htmlFor="schema">Saved list</label>
+            {(schemas ?? []).length === 0 ? (
+              <p className="hint">No saved lists yet. Upload or paste one instead.</p>
+            ) : (
+              <select className="input" id="schema" value={selectedSchema} onChange={(e) => setSelectedSchema(e.target.value)}>
+                <option value="">Choose a list…</option>
+                {(schemas ?? []).map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.name} ({s.fieldCount} fields)
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
         {source === "oneoff" && (
           <div className="field">
-            <label htmlFor="oneoff">
-              Canonical fields CSV <InfoTag text="Two columns: field,description. One row per canonical field." />
-            </label>
+            <label htmlFor="oneoffFile">Upload a CSV</label>
+            <input className="input" id="oneoffFile" type="file" accept=".csv,text/csv" onChange={(e) => loadCsv(e, setOneoffCsv)} />
+            <label htmlFor="oneoff">Or paste it</label>
             <textarea
               className="input"
               id="oneoff"
               rows={5}
-              placeholder={"field,description\norder_id,The order's unique id\ncustomer,End customer name"}
+              placeholder={"field,description\nproduct_key,SKU on the order line\nquantity,Ordered quantity\nclient_reference,Customer purchase order number"}
               value={oneoffCsv}
               onChange={(e) => setOneoffCsv(e.target.value)}
             />
@@ -248,19 +263,19 @@ export function MappingsPage() {
           <div className="stack">
             <div className="grid2">
               <div className="field">
-                <label htmlFor="schemaName">Schema name</label>
+                <label htmlFor="schemaName">List name</label>
                 <input className="input" id="schemaName" value={newSchemaName} onChange={(e) => setNewSchemaName(e.target.value)} />
               </div>
             </div>
             <div className="field">
-              <label htmlFor="newCsv">
-                Canonical fields CSV <InfoTag text="Two columns: field,description. Saved under the schema name for reuse." />
-              </label>
+              <label htmlFor="newCsvFile">Upload a CSV</label>
+              <input className="input" id="newCsvFile" type="file" accept=".csv,text/csv" onChange={(e) => loadCsv(e, setNewSchemaCsv)} />
+              <label htmlFor="newCsv">Or paste it</label>
               <textarea
                 className="input"
                 id="newCsv"
                 rows={5}
-                placeholder={"field,description\norder_id,The order's unique id\ncustomer,End customer name"}
+                placeholder={"field,description\nproduct_key,SKU on the order line\nquantity,Ordered quantity\nclient_reference,Customer purchase order number"}
                 value={newSchemaCsv}
                 onChange={(e) => setNewSchemaCsv(e.target.value)}
               />
@@ -272,22 +287,24 @@ export function MappingsPage() {
                 disabled={!newSchemaName.trim() || !newSchemaCsv.trim() || registerSchema.isPending}
                 onClick={handleRegister}
               >
-                {registerSchema.isPending ? "Saving…" : "Register schema"}
+                {registerSchema.isPending ? "Saving…" : "Save list"}
               </button>
             </div>
           </div>
         )}
 
-        <h3>ERP sample export</h3>
+        <h3>ERP exposed fields</h3>
+        <p className="hint">
+          A JSON array of records, or a CSV. Each key, or the CSV header, is the exposed field name, with a few
+          example values. A different ERP is a separate job.
+        </p>
         <div className="grid2">
           <div className="field">
-            <label htmlFor="erpName">ERP name</label>
-            <input className="input" id="erpName" placeholder="e.g. NetSuite" value={erpName} onChange={(e) => setErpName(e.target.value)} />
+            <label htmlFor="erpName">ERP</label>
+            <input className="input" id="erpName" placeholder="e.g. SAP" value={erpName} onChange={(e) => setErpName(e.target.value)} />
           </div>
           <div className="field">
-            <label htmlFor="samples">
-              Sample files <InfoTag text="One or more CSV or JSON files for this ERP. Export each spreadsheet sheet as its own file. A different ERP is a new job, not another file on this one." />
-            </label>
+            <label htmlFor="samples">JSON or CSV</label>
             <input className="input" id="samples" type="file" accept=".csv,.json" multiple onChange={handleFiles} />
           </div>
         </div>
@@ -346,7 +363,7 @@ export function MappingsPage() {
             columns={columns}
             rows={mapping}
             rowKey={(m) => m.erpField}
-            emptyMessage="No fields matched the canonical schema."
+            emptyMessage="None of the ERP exposed fields matched our order fields."
           />
         )}
       </section>
@@ -376,6 +393,12 @@ export function MappingsPage() {
           <div className="callout callout--info">
             Code generation: <StatusBadge status={statusLabel(run.status)} />
             {run.status === "FAILED" && <> — {run.error}</>}
+            {(run.status === "PENDING" || run.status === "PROCESSING") && (
+              <p className="hint">
+                Writing the adapter is the long step. It often takes several minutes, and it is stopped if it is still
+                running after 30.
+              </p>
+            )}
             {run.status === "DONE" && (
               <>
                 {" "}

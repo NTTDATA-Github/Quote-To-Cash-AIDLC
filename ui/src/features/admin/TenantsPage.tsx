@@ -99,7 +99,7 @@ export function TenantsPage() {
         </form>
       )}
       {error && <div className="callout callout--danger">Could not load resellers: {error.message}</div>}
-      <DataTable columns={columns} rows={bindings ?? []} rowKey={(b) => b.bindingId} emptyMessage={isLoading ? "Loading…" : "No resellers linked yet"} />
+      <DataTable columns={columns} rows={bindings ?? []} rowKey={(b) => b.bindingId} isLoading={isLoading} emptyMessage="No resellers linked yet" />
     </>
   );
 }

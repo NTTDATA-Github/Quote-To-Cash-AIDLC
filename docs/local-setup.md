@@ -22,7 +22,8 @@ bash scripts/local.sh up
 bash scripts/local.sh down
 ```
 `up` starts Postgres, Floci, and Odoo, applies migrations, provisions queues, seeds the
-demo tenant, and starts the api, worker, and (if `ui/node_modules` exists) AdminOps.
+demo tenant, and starts the api, worker, the reseller mock, AdminOps (if `ui/node_modules` exists), and the
+coding agent (if `erp-agent-service/.env` exists).
 `down` stops those processes and the containers. Volumes stay, so the next `up` keeps
 the database and the Odoo install.
 

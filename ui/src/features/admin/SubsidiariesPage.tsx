@@ -188,7 +188,7 @@ export function SubsidiariesPage() {
         </form>
       )}
       {error && <div className="callout callout--danger">Could not load subsidiaries: {error.message}</div>}
-      <DataTable columns={columns} rows={subsidiaries ?? []} rowKey={(c) => c.subsidiaryId} emptyMessage={isLoading ? "Loading…" : "No subsidiaries yet"} />
+      <DataTable columns={columns} rows={subsidiaries ?? []} rowKey={(c) => c.subsidiaryId} isLoading={isLoading} emptyMessage="No subsidiaries yet" />
     </>
   );
 }

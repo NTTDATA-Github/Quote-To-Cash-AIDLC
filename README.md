@@ -104,13 +104,14 @@ cd ui && npm install && cd ..
 Then:
 
 ```bash
-bash scripts/local.sh up          # Postgres, Floci, Odoo, migrate, seed, api, worker, AdminOps
+bash scripts/local.sh up          # Postgres, Floci, Odoo, migrate, seed, api, worker, reseller mock, AdminOps, coding agent
 bash scripts/local.sh down        # stop those processes and containers; databases are kept
 ```
 
-`up` is safe to run again. It restarts api, worker, and AdminOps so they pick up the
-current env, and it waits until `GET /livez` answers. Logs are `.local/api.log`,
-`.local/worker.log`, and `.local/ui.log`. The first Odoo boot installs modules and takes
+`up` is safe to run again. It restarts api, worker, AdminOps, and the coding agent so
+they pick up the current env, and it waits until `GET /livez` answers. Logs are
+`.local/api.log`, `.local/worker.log`, `.local/ui.log`, `.local/agent-api.log`, and
+`.local/agent-worker.log`. The first Odoo boot installs modules and takes
 a few minutes. `down` does not delete Docker volumes.
 
 Sign in to AdminOps as `demo-operator` / `DemoPass123!`. That login sees every order and
@@ -136,6 +137,8 @@ block sales.
 | Floci (AWS emulator) | http://localhost:4566 |
 | Floci health | http://localhost:4566/_floci/health |
 | Floci console | http://localhost:4566/_floci/ui |
+| Adapter agent | http://127.0.0.1:8002/livez |
+| Reseller mock | http://127.0.0.1:8090/hooks |
 | App Postgres | `localhost:5432`, database `portal`, user `portal`, password `portal` |
 
 AdminOps calls Floci Cognito through the Vite proxy at `/cognito-idp` (Floci does not
@@ -145,12 +148,9 @@ ids. Do not copy `ui/.env.example` over that file after `up`.
 The same steps by hand, including a machine-to-machine token, are in `docs/local-setup.md`.
 `npm run build` in `ui/` produces the static `dist/` folder that gets deployed as-is.
 
-Optional — watch outbound webhook deliveries land during dev:
-```bash
-python -m scripts.dev_webhook_receiver --port 8090 --secret <the endpoint's signing secret>
-```
-A standalone, dependency-free test aid (see the file's own docstring) — not something the
-app itself starts or depends on.
+`up` starts the reseller mock on http://127.0.0.1:8090/hooks, the stand-in for a reseller's
+server. Deliveries are logged in `.local/reseller-mock.log`. Set `WEBHOOK_RECEIVER_SECRET`
+to the endpoint's signing secret when you want those signatures checked.
 
 ## Adding a new ERP
 `docs/adding-an-erp.md` — four touch points (a status mapper, an adapter, one registry

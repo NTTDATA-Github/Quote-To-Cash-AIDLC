@@ -126,7 +126,7 @@ export function ConnectionsPage() {
         </form>
       )}
       {error && <div className="callout callout--danger">Could not load connections: {error.message}</div>}
-      <DataTable columns={columns} rows={connections ?? []} rowKey={(c) => c.connectionId} emptyMessage={isLoading ? "Loading…" : "No connections yet"} />
+      <DataTable columns={columns} rows={connections ?? []} rowKey={(c) => c.connectionId} isLoading={isLoading} emptyMessage="No connections yet" />
     </>
   );
 }

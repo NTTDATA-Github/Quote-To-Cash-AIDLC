@@ -1,23 +1,25 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { AlertTriangle, Bell, Boxes, Building2, LogOut, Plug, ShoppingCart, Users, Workflow } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "./auth/AuthContext";
 
-const ADMIN_NAV = [
+const ADMIN_NAV: { label: string; items: { to: string; label: string; icon: LucideIcon }[] }[] = [
   {
-    label: "Run",
+    label: "Operations",
     items: [
-      { to: "/admin/orders", label: "Orders" },
-      { to: "/admin/notifications", label: "Notifications" },
-      { to: "/admin/failed-messages", label: "Failed messages" },
+      { to: "/admin/orders", label: "Orders", icon: ShoppingCart },
+      { to: "/admin/notifications", label: "Notifications", icon: Bell },
+      { to: "/admin/failed-messages", label: "Failed messages", icon: AlertTriangle },
     ],
   },
   {
-    label: "Set up",
+    label: "Settings",
     items: [
-      { to: "/admin/connections", label: "ERP connections" },
-      { to: "/admin/subsidiaries", label: "Subsidiaries" },
-      { to: "/admin/tenants", label: "Resellers" },
-      { to: "/admin/mappings", label: "ERP mapping" },
+      { to: "/admin/connections", label: "ERP connections", icon: Plug },
+      { to: "/admin/subsidiaries", label: "Subsidiaries", icon: Building2 },
+      { to: "/admin/tenants", label: "Resellers", icon: Users },
+      { to: "/admin/mappings", label: "ERP mapping", icon: Workflow },
     ],
   },
 ];
@@ -42,7 +44,9 @@ export function AppShell() {
     <div className="app">
       <aside className="side">
         <div>
-          <div className="brandmark">AdminOps</div>
+          <div className="brandmark">
+            <Boxes size={18} strokeWidth={2.25} /> AdminOps
+          </div>
           <div className="role">Distributor</div>
         </div>
         <nav className="nav" aria-label="Main">
@@ -51,6 +55,7 @@ export function AppShell() {
               <div className="nav-label">{group.label}</div>
               {group.items.map((n) => (
                 <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-item ${isActive ? "is-active" : ""}`}>
+                  <n.icon size={16} strokeWidth={2} />
                   {n.label}
                 </NavLink>
               ))}
@@ -65,7 +70,7 @@ export function AppShell() {
           <div className="user">
             <span>{roles.join(", ") || "User"}</span>
             <button className="erp-btn erp-btn--ghost erp-btn--sm" type="button" onClick={signOut}>
-              Sign out
+              <LogOut size={14} strokeWidth={2} /> Sign out
             </button>
           </div>
         </header>

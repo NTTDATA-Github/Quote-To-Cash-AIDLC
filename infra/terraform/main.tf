@@ -93,3 +93,16 @@ module "compute" {
   app_env              = local.app_env
   acm_certificate_arn  = var.acm_certificate_arn
 }
+
+module "odoo" {
+  source              = "./modules/odoo"
+  count               = local.aws_count
+  prefix              = local.prefix
+  region              = var.region
+  vpc_id              = module.network[0].vpc_id
+  subnet_ids          = module.network[0].subnet_ids
+  execution_role_arn  = module.iam[0].task_execution_role_arn
+  execution_role_name = module.iam[0].task_execution_role_name
+  odoo_image          = var.odoo_image != "" ? var.odoo_image : "${module.registry[0].odoo_repository_url}:bootstrap"
+  odoo_db_password    = var.odoo_db_password
+}

@@ -12,14 +12,18 @@ interface DataTableProps<T> {
   rows: T[];
   rowKey: (row: T) => string;
   emptyMessage?: string;
+  isLoading?: boolean;
   onRowClick?: (row: T) => void;
   rowClassName?: (row: T) => string | undefined;
 }
 
+const SKELETON_ROWS = 4;
+
 /** design/design-system/components/DataTable.md — .erp-table from bundle.css. Generic
  * over the row type so every list screen (orders, connections, bindings, items) shares
  * one table implementation instead of hand-rolling markup per screen. */
-export function DataTable<T>({ columns, rows, rowKey, emptyMessage = "No data", onRowClick, rowClassName }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, emptyMessage = "No data", isLoading, onRowClick, rowClassName }: DataTableProps<T>) {
+  const showSkeleton = isLoading && rows.length === 0;
   return (
     <div className="erp-table-wrap">
       <table className="erp-table">
@@ -33,7 +37,17 @@ export function DataTable<T>({ columns, rows, rowKey, emptyMessage = "No data", 
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 ? (
+          {showSkeleton ? (
+            Array.from({ length: SKELETON_ROWS }, (_, i) => (
+              <tr key={`skeleton-${i}`} aria-hidden="true">
+                {columns.map((c) => (
+                  <td key={c.key} className={c.align === "right" ? "num" : undefined}>
+                    <span className="erp-skeleton" style={{ width: c.align === "right" ? 40 : "70%" }} />
+                  </td>
+                ))}
+              </tr>
+            ))
+          ) : rows.length === 0 ? (
             <tr>
               <td colSpan={columns.length} className="muted">
                 {emptyMessage}

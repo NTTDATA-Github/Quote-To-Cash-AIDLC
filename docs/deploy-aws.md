@@ -41,21 +41,28 @@ each deploy):
 | Secret | `AWS_DEPLOY_ROLE_ARN` | the `github_deploy_role_arn` output |
 | Secret | `TF_STATE_BUCKET` | the bootstrap state bucket |
 | Secret | `DB_PASSWORD` | the Aurora master password (`TF_VAR_db_password`) |
+| Secret | `ODOO_DB_PASSWORD` | the Odoo Postgres password (`TF_VAR_odoo_db_password`). Different from `DB_PASSWORD`. |
 | Variable | `AWS_REGION` | e.g. `us-east-1` |
 
 ## First deploy (from your machine)
 ```bash
 cd infra/terraform
 export TF_VAR_db_password='<a strong password>'
+export TF_VAR_odoo_db_password='<a different strong password>'
 terraform init -backend-config=envs/staging.s3.tfbackend
 terraform apply -var-file=envs/staging.tfvars \
   -var="api_image=<ECR>/o2c/api:bootstrap" \
   -var="worker_image=<ECR>/o2c/worker:bootstrap"
 ```
-The ECR repositories are created by this apply, so the very first run can use any
-placeholder image tag; the first real images arrive via the deploy workflow. Then run the
+The ECR repositories (api, worker, and Odoo) are created by this apply, so the very
+first run can use any placeholder image tag. Build and push the three images next
+(see [Odoo](#odoo) for the commands; the api and worker images use the same login).
+Odoo stays down until `o2c/odoo:bootstrap` exists in ECR. Then run the portal
 migration once (`alembic upgrade head`) — either the workflow step does it, or run it
 manually as an ECS task.
+
+Set both passwords on this first apply. Later applies leave them alone, but an empty
+password on the first apply is stored and will not be filled in afterward.
 
 ## Ongoing: the pipelines
 - **`ci.yml`** — on every PR + push to `main`: ruff (changed files), import-linter, pytest
@@ -67,6 +74,45 @@ manually as an ECS task.
   the task defs at the new images and rolls the services), runs the Alembic migration as a
   one-off ECS task, and waits for the services to stabilize. Gate it with the `staging`
   Environment's protection rule if you want manual approval before each deploy.
+
+## Odoo
+
+Odoo is a second service in the same VPC. Its database is a private RDS Postgres 15.
+The portal stays on Aurora. Do not point Odoo at Aurora.
+
+People open Odoo at `http://<terraform output odoo_alb_dns_name>`. The worker reaches
+that same address. The RDS host (`odoo_db_endpoint`) accepts connections only from
+the Odoo task.
+
+The image is `Dockerfile.odoo`. On an empty database it installs Sales, Inventory,
+and Invoicing, then grants those rights to internal users. Login is `admin` / `admin`.
+Change that password before anyone else uses it. Attachments live on the task disk
+and are gone when the task is replaced; the database is not.
+
+`erp_adapter_mode` stays `stub` until Odoo answers. Then set it to `real` in
+`envs/staging.tfvars`, create an ERP connection whose base URL is the Odoo load
+balancer (`http://<odoo_alb_dns_name>`, database `odoo`, user `admin`), and apply
+again. A cloud Odoo cannot call `127.0.0.1`. The worker's poll is what picks up
+orders. Bedrock and the code-generation service are a separate setup; they are
+not required for Odoo to come up.
+
+### Build and push (after the first apply has created the ECR repos)
+```bash
+AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+REGISTRY="$AWS_ACCOUNT.dkr.ecr.us-east-1.amazonaws.com"
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$REGISTRY"
+TAG=bootstrap
+docker build -f Dockerfile.api    -t "$REGISTRY/o2c/api:$TAG" .
+docker build -f Dockerfile.worker -t "$REGISTRY/o2c/worker:$TAG" .
+docker build -f Dockerfile.odoo   -t "$REGISTRY/o2c/odoo:$TAG" .
+docker push "$REGISTRY/o2c/api:$TAG"
+docker push "$REGISTRY/o2c/worker:$TAG"
+docker push "$REGISTRY/o2c/odoo:$TAG"
+aws ecs update-service --cluster o2c-staging --service o2c-staging-odoo --force-new-deployment
+```
+The first Odoo boot can take several minutes. Follow it with
+`aws logs tail /ecs/o2c-staging/odoo --follow`. The site is up when `/web/login`
+returns 200.
 
 ## Debugging
 

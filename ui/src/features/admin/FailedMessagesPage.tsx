@@ -55,7 +55,8 @@ export function FailedMessagesPage() {
         columns={columns}
         rows={attention}
         rowKey={(o) => o.orderId}
-        emptyMessage={isLoading ? "Loading…" : "Nothing needs attention right now"}
+        isLoading={isLoading}
+        emptyMessage="Nothing needs attention right now"
       />
     </>
   );

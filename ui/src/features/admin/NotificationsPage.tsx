@@ -45,7 +45,8 @@ export function NotificationsPage() {
         columns={columns}
         rows={rows}
         rowKey={(d) => d.deliveryId}
-        emptyMessage={isLoading ? "Loading…" : "No notifications sent yet"}
+        isLoading={isLoading}
+        emptyMessage="No notifications sent yet"
         onRowClick={(d) => navigate(`/admin/orders/${d.orderId}`)}
       />
     </>

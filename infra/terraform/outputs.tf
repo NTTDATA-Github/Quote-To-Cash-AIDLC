@@ -20,6 +20,21 @@ output "odoo_secret_arn" {
 }
 
 # AWS-only outputs (null when use_floci=true).
+output "odoo_alb_dns_name" {
+  description = "Public DNS name for Odoo. Open http://<this> . The database is not on this host."
+  value       = one(module.odoo[*].alb_dns_name)
+}
+
+output "odoo_db_endpoint" {
+  description = "Private Postgres 15 host for Odoo. Only the Odoo task can connect."
+  value       = one(module.odoo[*].db_endpoint)
+}
+
+output "ecr_odoo_repository_url" {
+  description = "ECR repo URL for the Odoo image."
+  value       = one(module.registry[*].odoo_repository_url)
+}
+
 output "alb_dns_name" {
   description = "Public ALB DNS name — the app's entry point."
   value       = one(module.compute[*].alb_dns_name)

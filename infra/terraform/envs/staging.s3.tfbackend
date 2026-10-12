@@ -1,7 +1,7 @@
 # Partial backend config for the `staging` environment. Fill in the bucket created by
 # infra/terraform/bootstrap, then:
 #   terraform -chdir=infra/terraform init -backend-config=envs/staging.s3.tfbackend
-bucket         = "REPLACE_WITH_YOUR_STATE_BUCKET"
+bucket         = "o2c-tfstate-211125351774"
 key            = "staging/terraform.tfstate"
 region         = "us-east-1"
 dynamodb_table = "o2c-tf-locks"

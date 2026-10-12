@@ -1,5 +1,5 @@
 /* Button */
-.erp-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 32px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 14px/20px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.erp-btn { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); height: 32px; padding: 0 var(--space-3); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--ink); font: 600 14px/20px var(--font-sans); cursor: pointer; white-space: nowrap; transition: background-color var(--transition), border-color var(--transition), filter var(--transition); }
 .erp-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .erp-btn--sm { height: 24px; padding: 0 var(--space-2); font-size: 12px; line-height: 16px; }
 .erp-btn--primary { background: var(--brand); color: var(--on-brand); }
@@ -22,13 +22,19 @@
 .erp-badge--danger { background: var(--status-danger-bg); color: var(--status-danger-fg); --glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 2.5l7 7M9.5 2.5l-7 7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E"); }
 
 /* DataTable */
-.erp-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); }
+.erp-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: var(--shadow-card); }
 .erp-table { width: 100%; border-collapse: collapse; color: var(--ink); font: 400 13px/18px var(--font-sans); font-variant-numeric: tabular-nums; }
 .erp-table th { height: 32px; padding: 0 var(--space-3); background: var(--surface-sunken); border-bottom: 1px solid var(--line-strong); color: var(--ink-muted); font: 600 12px/16px var(--font-sans); letter-spacing: 0.04em; text-align: left; text-transform: uppercase; white-space: nowrap; }
 .erp-table td { height: 32px; padding: 0 var(--space-3); border-bottom: 1px solid var(--line); white-space: nowrap; }
 .erp-table tbody tr:last-child td { border-bottom: 0; }
+.erp-table tbody tr { transition: background-color var(--transition); }
 .erp-table tbody tr:hover { background: var(--surface-sunken); }
 .erp-table tbody tr[aria-selected="true"] { background: var(--brand-soft); }
+
+/* DataTable loading skeleton — swapped in for emptyMessage while isLoading, instead of
+   literal "Loading…" text, so a list never flashes an empty state before data arrives. */
+.erp-skeleton { display: inline-block; height: 12px; border-radius: var(--radius-sm); background: linear-gradient(90deg, var(--surface-sunken) 25%, var(--line) 37%, var(--surface-sunken) 63%); background-size: 400% 100%; animation: erp-shimmer 1.4s ease infinite; }
+@keyframes erp-shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
 .erp-table .num { text-align: right; }
 .erp-table .id { font-family: var(--font-mono); }
 .erp-table th[aria-sort]::after { content: ""; display: inline-block; margin-left: 6px; vertical-align: middle; border: 4px solid transparent; }

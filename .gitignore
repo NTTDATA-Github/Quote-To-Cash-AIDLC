@@ -34,6 +34,10 @@ Thumbs.db
 
 # Terraform provider binaries (keep .terraform.lock.hcl)
 .terraform/
+# Local CLI config so bootstrap can reuse the provider already on disk.
+infra/terraform/bootstrap/terraform.rc
+# Bootstrap's state is local (chicken/egg: it creates the remote-state bucket itself).
+infra/terraform/bootstrap/terraform.tfstate*
 
 # Temp
 *.log

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Start or stop the local stack: Postgres, Floci, Odoo, then migrate, seed, api, worker.
+# Start or stop the local stack: Postgres, Floci, Odoo, then migrate, seed,
+# api, worker, the reseller mock, AdminOps, and (when erp-agent-service/.env exists) the coding agent.
 #   bash scripts/local.sh up
 #   bash scripts/local.sh down
 set -euo pipefail
 cd "$(dirname "$0")/.."
+ROOT="$(pwd)"
 
 export DATABASE_URL="${DATABASE_URL:-postgresql+psycopg2://portal:portal@127.0.0.1:5432/portal}"
 export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://127.0.0.1:4566}"
@@ -22,6 +24,12 @@ elif [[ -x .venv/bin/python ]]; then
 else
   echo "No virtualenv. Create one with: python -m venv .venv && .venv/Scripts/python -m pip install -e \".[dev]\""
   exit 1
+fi
+# Absolute so the agent can cd into its own directory and still find this interpreter.
+if command -v cygpath >/dev/null 2>&1; then
+  PY_ABS="$(cygpath -w "$ROOT/$PY")"
+else
+  PY_ABS="$ROOT/$PY"
 fi
 
 mkdir -p .local
@@ -50,6 +58,40 @@ start_bg() {
   local name="$1"
   shift
   "$@" >".local/${name}.log" 2>&1 &
+  echo $! >".local/${name}.pid"
+  echo "$name started (log: .local/${name}.log)"
+}
+
+# Floci's bedrock-runtime returns a stub. The mapping worker calls real Bedrock with
+# the same bearer token the coding agent keeps in its .env.
+load_bedrock_token() {
+  if [[ -n "${AWS_BEARER_TOKEN_BEDROCK:-}" || ! -f erp-agent-service/.env ]]; then
+    return 0
+  fi
+  AWS_BEARER_TOKEN_BEDROCK="$("$PY" - <<'PY'
+from pathlib import Path
+for line in Path("erp-agent-service/.env").read_text(encoding="utf-8").splitlines():
+    if line.startswith("AWS_BEARER_TOKEN_BEDROCK="):
+        value = line.split("=", 1)[1].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        print(value, end="")
+        break
+PY
+)"
+  export AWS_BEARER_TOKEN_BEDROCK
+}
+
+# The agent's .env (sqlite job db, Bedrock bearer token) must win over the portal
+# DATABASE_URL, dummy AWS keys, and Floci endpoint exported above. load_dotenv does not override.
+start_agent() {
+  local name="$1"
+  shift
+  (
+    cd erp-agent-service
+    unset DATABASE_URL AWS_ENDPOINT_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+    "$@"
+  ) >".local/${name}.log" 2>&1 &
   echo $! >".local/${name}.pid"
   echo "$name started (log: .local/${name}.log)"
 }
@@ -83,16 +125,35 @@ up() {
   set +a
   # Restart the app processes every up so they load the env this run just wrote.
   stop_bg
+  load_bedrock_token
   start_bg api "$PY" -m uvicorn src.api.app:app --host 127.0.0.1 --port 8000
   start_bg worker "$PY" -m src.worker.main
+  if [[ -n "${WEBHOOK_RECEIVER_SECRET:-}" ]]; then
+    start_bg reseller-mock "$PY" -m scripts.dev_webhook_receiver --port 8090 --secret "$WEBHOOK_RECEIVER_SECRET"
+  else
+    start_bg reseller-mock "$PY" -m scripts.dev_webhook_receiver --port 8090
+  fi
   if [[ -d ui/node_modules ]]; then
     start_bg ui npm --prefix ui run dev -- --host 127.0.0.1 --port 5173
   else
     echo "UI dependencies are not installed. From ui/: npm install"
   fi
+  if [[ -f erp-agent-service/.env ]] && "$PY" -c "import dotenv" >/dev/null 2>&1; then
+    start_agent agent-api "$PY_ABS" -m uvicorn service.app:app --host 127.0.0.1 --port 8002
+    start_agent agent-worker "$PY_ABS" -m service.worker
+  elif [[ -f erp-agent-service/.env ]]; then
+    echo "Agent dependencies are not installed. pip install -r erp-agent-service/requirements.txt"
+  else
+    echo "erp-agent-service/.env is missing. Copy erp-agent-service/.env.example to start the coding agent."
+  fi
   if ! wait_for "API" curl -sf http://127.0.0.1:8000/livez; then
     echo "api failed. Last log lines:" >&2
     tail -n 40 .local/api.log >&2 || true
+    exit 1
+  fi
+  if [[ -f .local/agent-api.pid ]] && ! wait_for "Agent API" curl -sf http://127.0.0.1:8002/livez; then
+    echo "agent api failed. Last log lines:" >&2
+    tail -n 40 .local/agent-api.log >&2 || true
     exit 1
   fi
   cat <<'EOF'
@@ -110,6 +171,8 @@ Local stack is up.
   Floci                          http://localhost:4566
   Floci health                   http://localhost:4566/_floci/health
   Floci console                  http://localhost:4566/_floci/ui
+  Adapter agent                  http://127.0.0.1:8002/livez
+  Reseller mock                  http://127.0.0.1:8090/hooks
 
 Sign in to AdminOps as demo-operator / DemoPass123!. Odoo is admin / admin.
 Orders are read from Odoo for partner 1 (the demo binding). Set Internal Reference on each product line.

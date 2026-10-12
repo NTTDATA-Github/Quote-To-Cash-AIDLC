@@ -16,6 +16,7 @@ permissions:
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
   TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+  TF_VAR_odoo_db_password: ${{ secrets.ODOO_DB_PASSWORD }}
 
 jobs:
   plan:
@@ -58,6 +59,7 @@ jobs:
             -var-file=envs/staging.tfvars \
             -var="api_image=placeholder" \
             -var="worker_image=placeholder" \
+            -var="odoo_image=placeholder" \
             2>&1 | tee plan.txt
 
       - name: Comment plan on PR
