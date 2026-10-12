@@ -159,3 +159,47 @@ class OrderEventType:
     occurred_at: str
     correlation_id: str | None
     payload: strawberry.scalars.JSON
+
+
+# --- ERP field-mapping proposer (operator "ERP mapping" tab) ---
+@strawberry.type
+class CanonicalSchemaType:
+    name: str
+    field_count: int
+
+
+@strawberry.type
+class MappingEntryType:
+    erp_field: str
+    canonical_field: str
+    sample_data: str
+    confidence: int  # 0-100; treat below ~95 as something to check by hand
+
+
+@strawberry.type
+class MappingJobType:
+    job_id: str
+    erp_name: str
+    status: str  # PENDING | PROCESSING | DONE | FAILED
+    mapping: list[MappingEntryType]  # empty until status is DONE (or if nothing matched)
+    error: str | None
+    adapter_run_id: str | None  # set once the mapping has been approved & handed off
+
+
+@strawberry.type
+class AdapterRunType:
+    """A snapshot of the `erp-agent-service` run that implements an approved mapping."""
+
+    status: str  # PENDING | PROCESSING | DONE | FAILED
+    branch: str | None
+    pr_url: str | None
+    error: str | None
+
+
+@strawberry.input
+class SampleFileInput:
+    """One uploaded ERP sample export — the file read client-side into `content`. The
+    backend truncates it to a sample before storing (no raw file is kept)."""
+
+    filename: str
+    content: str

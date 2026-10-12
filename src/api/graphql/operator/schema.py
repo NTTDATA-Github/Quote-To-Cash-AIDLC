@@ -12,15 +12,26 @@ from typing import TYPE_CHECKING
 import strawberry
 from strawberry.extensions import QueryDepthLimiter
 
+from src.modules.integration.mapping.domain.errors import (
+    CanonicalSchemaNotFound,
+    EmptyCanonicalSchema,
+    MappingJobNotFound,
+    MappingNotReady,
+    NoCanonicalFields,
+)
 from src.modules.reference.connections.application.service import ConnectionService
 from src.modules.reference.connections.domain.models import ErpConnection, ErpType
 from src.modules.reference.tenancy.application.service import BindingService
 from src.shared.types import BindingId, ConnectionId, TenantId
 
 from .types import (
+    AdapterRunType,
     BindingType,
+    CanonicalSchemaType,
     ConnectionType,
     ErpRouteType,
+    MappingEntryType,
+    MappingJobType,
     MoneyType,
     NotificationType,
     OperatorOrder,
@@ -28,12 +39,17 @@ from .types import (
     OperatorPartiesType,
     OperatorTimelineEntryType,
     OrderEventType,
+    SampleFileInput,
     SubsidiaryType,
 )
 
 if TYPE_CHECKING:
     from strawberry.types import Info
 
+    from src.modules.integration.mapping.domain.models import (
+        AdapterRunResult,
+        MappingJob,
+    )
     from src.modules.reference.tenancy.domain.models import TenantConnectionBinding
     from src.modules.sales.ordering.projections.read_models import OperatorOrderView
     from src.modules.sales.quoting.domain.models import Subsidiary
@@ -117,6 +133,29 @@ def _company_to_gql(company: Subsidiary) -> SubsidiaryType:
         country=company.country,
         language=company.language,
     )
+
+
+def _mapping_job_to_gql(job: MappingJob) -> MappingJobType:
+    return MappingJobType(
+        job_id=job.job_id,
+        erp_name=job.erp_name,
+        status=job.status.value,
+        mapping=[
+            MappingEntryType(
+                erp_field=e.erp_field,
+                canonical_field=e.canonical_field,
+                sample_data=e.sample_data,
+                confidence=e.confidence,
+            )
+            for e in (job.result or [])
+        ],
+        error=job.error,
+        adapter_run_id=job.adapter_run_id,
+    )
+
+
+def _adapter_run_to_gql(run: AdapterRunResult) -> AdapterRunType:
+    return AdapterRunType(status=run.status, branch=run.branch, pr_url=run.pr_url, error=run.error)
 
 
 @strawberry.type
@@ -205,6 +244,38 @@ class Query:
             connection_id=connection_id,
             erp_company_id=ctx.container.quote_service.get_erp_company_id(subsidiary_id),
         )
+
+    # --- ERP field-mapping proposer ---
+    @strawberry.field
+    def canonical_schemas(self, info: Info[GraphQLContext, None]) -> list[CanonicalSchemaType]:
+        """The registered canonical field lists a mapping can be proposed against."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        service = ctx.container.mapping_service
+        return [
+            CanonicalSchemaType(name=name, field_count=service.field_count(name))
+            for name in service.list_schemas()
+        ]
+
+    @strawberry.field
+    def mapping_job(self, info: Info[GraphQLContext, None], job_id: str) -> MappingJobType | None:
+        """Poll a submitted proposal job. `status` goes PENDING -> PROCESSING -> DONE /
+        FAILED; `mapping` is populated once DONE."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        job = ctx.container.mapping_service.get_job(job_id)
+        return _mapping_job_to_gql(job) if job is not None else None
+
+    @strawberry.field
+    def adapter_run(self, info: Info[GraphQLContext, None], job_id: str) -> AdapterRunType | None:
+        """Poll the adapter-codegen run started by `approveMapping`. Null until approved."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            run = ctx.container.mapping_service.get_adapter_run(job_id)
+        except MappingJobNotFound as e:
+            raise Exception(f"mapping job not found: {e}") from e
+        return _adapter_run_to_gql(run) if run is not None else None
 
 
 @strawberry.type
@@ -326,6 +397,67 @@ class Mutation:
         ctx.container.orders.save(order)
         ctx.container.drain()
         return True
+
+    # --- ERP field-mapping proposer ---
+    @strawberry.mutation
+    def register_canonical_schema(
+        self, info: Info[GraphQLContext, None], name: str, csv_text: str
+    ) -> CanonicalSchemaType:
+        """Register (or replace) a canonical field list — a CSV of `field,description`
+        rows — reusable by name across many proposal jobs."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            ctx.container.mapping_service.register_schema(name, csv_text)
+        except EmptyCanonicalSchema as e:
+            raise Exception(str(e)) from e
+        return CanonicalSchemaType(
+            name=name, field_count=ctx.container.mapping_service.field_count(name)
+        )
+
+    @strawberry.mutation
+    def submit_mapping(
+        self,
+        info: Info[GraphQLContext, None],
+        erp_name: str,
+        sample_files: list[SampleFileInput],
+        schema_name: str | None = None,
+        canonical_fields_csv: str | None = None,
+    ) -> MappingJobType:
+        """Submit an ERP's sample export(s) for a draft mapping against a canonical field
+        list (a registered `schemaName` OR an inline `canonicalFieldsCsv`). Returns the
+        enqueued job; poll `mappingJob(jobId)` for the result."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            job = ctx.container.mapping_service.submit_job(
+                erp_name=erp_name,
+                sample_files={f.filename: f.content for f in sample_files},
+                schema_name=schema_name,
+                canonical_fields_csv=canonical_fields_csv,
+            )
+        except (CanonicalSchemaNotFound, EmptyCanonicalSchema, NoCanonicalFields, ValueError) as e:
+            raise Exception(str(e)) from e
+        # Memory profile has no worker — process inline so the result is ready on the next
+        # poll. In the postgres profile this is a no-op; the `mapping` worker role runs it.
+        ctx.container.mapping_process_pending()
+        refreshed = ctx.container.mapping_service.get_job(job.job_id)
+        return _mapping_job_to_gql(refreshed if refreshed is not None else job)
+
+    @strawberry.mutation
+    def approve_mapping(self, info: Info[GraphQLContext, None], job_id: str) -> MappingJobType:
+        """Approve a reviewed mapping and hand it to the adapter-codegen service. Poll
+        `adapterRun(jobId)` for the branch/PR. The mapping is treated as ground truth —
+        review it first."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            job = ctx.container.mapping_service.approve(job_id)
+        except MappingJobNotFound as e:
+            raise Exception(f"mapping job not found: {e}") from e
+        except MappingNotReady as e:
+            raise Exception(str(e)) from e
+        return _mapping_job_to_gql(job)
 
 
 def build_operator_schema() -> strawberry.Schema:

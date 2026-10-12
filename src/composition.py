@@ -31,6 +31,20 @@ from src.modules.integration.erp.application.ports import (
 from src.modules.integration.erp.application.reconcile import ReconcileSweeper
 from src.modules.integration.erp.infrastructure.registry import build_adapter_registry
 from src.modules.integration.erp.infrastructure.stub_adapter import StubErpAdapter
+from src.modules.integration.mapping.application.processing import process_pending_jobs
+from src.modules.integration.mapping.application.service import MappingService
+from src.modules.integration.mapping.infrastructure.agent_launcher import HttpAdapterRunLauncher
+from src.modules.integration.mapping.infrastructure.llm_proposer import LlmMappingProposer
+from src.modules.integration.mapping.infrastructure.memory import (
+    InMemoryCanonicalSchemaRepository,
+    InMemoryMappingJobRepository,
+    StubAdapterRunLauncher,
+    StubMappingProposer,
+)
+from src.modules.integration.mapping.infrastructure.postgres import (
+    PostgresCanonicalSchemaRepository,
+    PostgresMappingJobRepository,
+)
 from src.modules.integration.webhooks_inbound.application.ingress import InboundWebhookService
 from src.modules.integration.webhooks_inbound.infrastructure.memory import (
     InMemoryDedupStore,
@@ -92,6 +106,7 @@ from src.shared.identity import (
     IdentityProvider,
 )
 from src.shared.identity.cognito import issuer_url
+from src.shared.llm import BedrockLlmClient
 from src.shared.messaging import InMemoryMessageBus
 from src.shared.messaging.facts import BusFactPublisher, FactPublisher, OutboxFactPublisher
 from src.shared.persistence.engine import get_session_factory
@@ -102,6 +117,10 @@ from src.shared.secrets.aws import SecretsManagerSecretStore
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.modules.integration.mapping.application.ports import (
+        MappingJobRepository,
+        MappingProposer,
+    )
     from src.modules.integration.webhooks_outbound.application.ports import (
         WebhookDeliveryRepository,
         WebhookEndpointRepository,
@@ -216,6 +235,14 @@ class Container:
     quotes: QuoteRepository
     subsidiaries: SubsidiaryRepository
     subsidiary_routes: SubsidiaryRouteRepository
+    # ERP field-mapping proposer (operator AdminOps "ERP mapping" tab). `mapping_jobs` and
+    # `mapping_proposer` are exposed so the worker's `mapping` role can run the LLM off the
+    # request path; `mapping_process_pending` processes inline in the memory profile (with
+    # a deterministic stub proposer) and is a no-op in postgres (the worker does it).
+    mapping_service: MappingService
+    mapping_jobs: MappingJobRepository
+    mapping_proposer: MappingProposer
+    mapping_process_pending: Callable[[], int]
 
 
 def _matched_lines(order: Order, items: list) -> list[dict[str, str]]:
@@ -347,6 +374,12 @@ def _build_memory_container(settings: Settings) -> Container:
         order_status=StatusApplier(repo),
     )
 
+    mapping_jobs: MappingJobRepository = InMemoryMappingJobRepository()
+    mapping_proposer: MappingProposer = StubMappingProposer()
+    mapping_service = MappingService(
+        mapping_jobs, InMemoryCanonicalSchemaRepository(), StubAdapterRunLauncher()
+    )
+
     return Container(
         settings=settings,
         order_service=OrderService(repo),
@@ -375,6 +408,11 @@ def _build_memory_container(settings: Settings) -> Container:
         quotes=quotes,
         subsidiaries=subsidiaries,
         subsidiary_routes=subsidiary_routes,
+        mapping_service=mapping_service,
+        mapping_jobs=mapping_jobs,
+        mapping_proposer=mapping_proposer,
+        # memory profile has no worker — process the just-submitted job inline (offline stub)
+        mapping_process_pending=lambda: process_pending_jobs(mapping_jobs, mapping_proposer),
     )
 
 
@@ -539,6 +577,16 @@ def _build_postgres_container(settings: Settings) -> Container:
         orders=projections,
     )
 
+    mapping_jobs: MappingJobRepository = PostgresMappingJobRepository(session_factory)
+    mapping_proposer: MappingProposer = LlmMappingProposer(
+        BedrockLlmClient(settings.mapping_bedrock_model_id, settings.aws_region)
+    )
+    mapping_service = MappingService(
+        mapping_jobs,
+        PostgresCanonicalSchemaRepository(session_factory),
+        HttpAdapterRunLauncher(settings.agent_service_url),
+    )
+
     return Container(
         settings=settings,
         order_service=order_service,
@@ -567,4 +615,9 @@ def _build_postgres_container(settings: Settings) -> Container:
         quotes=quotes,
         subsidiaries=subsidiaries,
         subsidiary_routes=subsidiary_routes,
+        mapping_service=mapping_service,
+        mapping_jobs=mapping_jobs,
+        mapping_proposer=mapping_proposer,
+        # the `mapping` worker role runs the LLM off the request path — not inline here
+        mapping_process_pending=lambda: 0,
     )

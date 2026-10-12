@@ -34,6 +34,7 @@ from sqlalchemy import Column, MetaData, String, Table, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.composition import build_container
+from src.modules.integration.mapping.application.processing import process_pending_jobs
 from src.shared.config import get_settings
 from src.shared.messaging.aws import SnsFifoPublisher, SqsConsumerRunner
 from src.shared.persistence.engine import get_session_factory
@@ -54,6 +55,7 @@ if TYPE_CHECKING:
 log = logging.getLogger("worker")
 
 _TERMINAL_STATES = ("CLOSED", "CANCELLED", "REJECTED")
+_MAPPING_POLL_SECONDS = 5.0
 
 _processed_events = Table(
     "processed_events",
@@ -127,6 +129,21 @@ def _open_orders_provider(session_factory: sessionmaker[Session]):
         return [row[0] for row in rows]
 
     return provider
+
+
+def _run_mapping_poll(container, stop: threading.Event) -> None:  # type: ignore[no-untyped-def]
+    """Poll the `mapping_jobs` table for PENDING proposal jobs and run them through the
+    LLM (`container.mapping_proposer`). A polling loop, not an SQS consumer: these are
+    manual, low-volume, per-new-ERP runs, and the former standalone service worked the
+    same way. Sleeps only when it finds nothing, so a backlog drains promptly."""
+    while not stop.is_set():
+        try:
+            processed = process_pending_jobs(container.mapping_jobs, container.mapping_proposer)
+        except Exception:
+            log.exception("mapping poll iteration failed")
+            processed = 0
+        if processed == 0:
+            stop.wait(_MAPPING_POLL_SECONDS)
 
 
 def main() -> None:  # pragma: no cover - process entrypoint
@@ -207,6 +224,13 @@ def main() -> None:  # pragma: no cover - process entrypoint
 
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
+
+    if "mapping" in roles:
+        threads.append(
+            threading.Thread(
+                target=_run_mapping_poll, args=(container, stop), name="mapping-poll", daemon=True
+            )
+        )
 
     log.info("worker starting: roles=%s, %d thread(s)", sorted(roles), len(threads))
     for thread in threads:

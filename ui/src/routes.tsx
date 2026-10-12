@@ -10,6 +10,7 @@ import { SubsidiariesPage } from "./features/admin/SubsidiariesPage";
 import { OrdersPage as OperatorOrdersPage } from "./features/admin/OrdersPage";
 import { OrderDetailPage as OperatorOrderDetailPage } from "./features/admin/OrderDetailPage";
 import { FailedMessagesPage } from "./features/admin/FailedMessagesPage";
+import { MappingsPage } from "./features/admin/MappingsPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: "admin/orders/:orderId", element: <OperatorOrderDetailPage /> },
       { path: "admin/subsidiaries", element: <SubsidiariesPage /> },
       { path: "admin/connections", element: <ConnectionsPage /> },
+      { path: "admin/mappings", element: <MappingsPage /> },
       { path: "admin/tenants", element: <TenantsPage /> },
       { path: "admin/failed-messages", element: <FailedMessagesPage /> },
     ],

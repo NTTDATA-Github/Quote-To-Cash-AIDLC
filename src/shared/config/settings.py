@@ -18,6 +18,7 @@ _ALL_WORKER_ROLES = frozenset(
         "webhook-dispatch",
         "relay",
         "reconcile",
+        "mapping",
     }
 )
 
@@ -45,6 +46,11 @@ class Settings:
     # {this}/tenant.<id>, {this}/role.<ROLE>
     cognito_resource_server_id: str
     cors_allowed_origins: list[str]  # the UI's origin(s) — e.g. an S3/CloudFront URL in prod
+    # ERP field-mapping proposer (operator AdminOps "ERP mapping" tab):
+    # the Bedrock model the `mapping` worker calls, and the base URL of the separate
+    # erp-agent-service the "approve & implement" action hands an approved mapping to.
+    mapping_bedrock_model_id: str
+    agent_service_url: str
 
 
 def _parse_worker_roles(raw: str) -> frozenset[str]:
@@ -86,4 +92,8 @@ def get_settings() -> Settings:
             ).split(",")
             if origin.strip()
         ],
+        mapping_bedrock_model_id=os.environ.get(
+            "MAPPING_BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+        ),
+        agent_service_url=os.environ.get("AGENT_SERVICE_URL", "http://localhost:8002"),
     )

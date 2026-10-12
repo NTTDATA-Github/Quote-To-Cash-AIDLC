@@ -32,7 +32,7 @@ network failure modes) up front for a system that doesn't need it yet.
 | Process/service | What it does | Talks to |
 |---|---|---|
 | **`api`** (FastAPI) | Serves GraphQL (`/graphql/reseller`, `/graphql/operator`) and inbound ERP webhooks. Handles reads and synchronous writes (place/cancel an order). | Postgres, Cognito (auth) |
-| **`worker`** | Five SQS consumers (order-processing, order-delivery, order-fulfillment, projections, webhook-dispatch), the outbox relay, and the reconciliation sweeper. Talking to the ERP, building read models, and sending webhooks happens here, not in `api`. | Postgres, SQS/SNS, the ERP (Odoo), reseller webhook endpoints |
+| **`worker`** | Five SQS consumers (order-processing, order-delivery, order-fulfillment, projections, webhook-dispatch), the outbox relay, the reconciliation sweeper, and a polling role (`mapping`) that runs ERP field-mapping proposal jobs through an LLM. Talking to the ERP, building read models, sending webhooks, and the LLM mapping call happen here, not in `api`. | Postgres, SQS/SNS, the ERP (Odoo), reseller webhook endpoints, Bedrock (mapping) |
 | **`ui`** (React SPA) | AdminOps, the distributor's application. Talks to `api` over GraphQL only. | `api` |
 
 ```mermaid
@@ -72,7 +72,7 @@ src/
   modules/           # sales/ (ordering, quoting, shipment, invoicing),
                      # reference/ (connections, tenancy),
                      # integration/ (ERP adapters + status mapping, webhooks_inbound,
-                     # webhooks_outbound)
+                     # webhooks_outbound, mapping — the LLM field-mapping proposer)
                      # each has domain/ (pure), application/ (ports+services),
                      # infrastructure/ (memory + postgres adapters), tests/ (co-located)
   shared/            # eventsourcing kernel, messaging, persistence, secrets, config, types

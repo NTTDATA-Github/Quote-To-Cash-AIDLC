@@ -7,6 +7,7 @@ const ADMIN_NAV = [
   { to: "/admin/orders", label: "Orders" },
   { to: "/admin/subsidiaries", label: "Subsidiaries" },
   { to: "/admin/connections", label: "ERP connections" },
+  { to: "/admin/mappings", label: "ERP mapping" },
   { to: "/admin/tenants", label: "Resellers" },
   { to: "/admin/failed-messages", label: "Failed messages" },
 ];
@@ -18,6 +19,7 @@ function crumbFor(pathname: string): string {
   if (pathname.startsWith("/admin/orders")) return "AdminOps / Orders";
   if (pathname.startsWith("/admin/subsidiaries")) return "AdminOps / Subsidiaries";
   if (pathname.startsWith("/admin/connections")) return "AdminOps / ERP connections";
+  if (pathname.startsWith("/admin/mappings")) return "AdminOps / ERP mapping";
   if (pathname.startsWith("/admin/tenants")) return "AdminOps / Resellers";
   if (pathname.startsWith("/admin/failed-messages")) return "AdminOps / Failed messages";
   return "";

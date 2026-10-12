@@ -1,0 +1,5 @@
+repo-cache/
+worktrees/
+agent_runs.db
+__pycache__/
+.pytest_cache/
