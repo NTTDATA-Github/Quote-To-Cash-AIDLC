@@ -1,10 +1,17 @@
 import { useState, type FormEvent } from "react";
+import { Search } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
+import { FilterMenu } from "../../components/FilterMenu";
 import { InfoTag } from "../../components/InfoTag";
+import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useBindings, useConnections, useCreateBinding, useRemoveBinding, useVerifyBinding } from "../../hooks/useAdmin";
 import type { Binding } from "../../api/queries/admin";
+import { statusLabel } from "../../lib/statusLabel";
+
+const STATUS_FILTERS = ["all", "TO_VERIFY", "VERIFIED", "REMOVED"] as const;
+const STATUS_OPTIONS = STATUS_FILTERS.map((s) => ({ value: s, label: s === "all" ? "All" : statusLabel(s) }));
 
 export function TenantsPage() {
   const { data: bindings, isLoading, error } = useBindings();
@@ -14,12 +21,18 @@ export function TenantsPage() {
   const removeBinding = useRemoveBinding();
   const [form, setForm] = useState({ tenantId: "", connectionId: "", erpCustomerId: "" });
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]>("all");
+
+  const rows = (bindings ?? [])
+    .filter((b) => status === "all" || b.status === status)
+    .filter((b) => [b.tenantId, b.connectionId, b.erpCustomerId].join(" ").toLowerCase().includes(search.toLowerCase()));
 
   const columns: Column<Binding>[] = [
-    { key: "tenant", header: "Tenant ID", render: (b) => <span className="id">{b.tenantId}</span> },
-    { key: "connection", header: "Connection", render: (b) => b.connectionId },
-    { key: "customer", header: "ERP customer ID", render: (b) => <span className="mono">{b.erpCustomerId}</span> },
-    { key: "status", header: "Status", render: (b) => <StatusBadge status={b.status} /> },
+    { key: "tenant", header: "Reseller ID", render: (b) => <span className="id">{b.tenantId}</span>, sortValue: (b) => b.tenantId },
+    { key: "connection", header: "Connection", render: (b) => b.connectionId, sortValue: (b) => b.connectionId },
+    { key: "customer", header: "ERP customer ID", render: (b) => <span className="mono">{b.erpCustomerId}</span>, sortValue: (b) => b.erpCustomerId },
+    { key: "status", header: "Status", render: (b) => <StatusBadge status={statusLabel(b.status)} />, sortValue: (b) => b.status },
     {
       key: "actions",
       header: "",
@@ -48,22 +61,20 @@ export function TenantsPage() {
 
   return (
     <>
-      <div className="pagehead">
-        <div>
-          <h1>Resellers</h1>
-          <p>Each reseller is a tenant with a customer link into every ERP connection it buys from.</p>
-        </div>
-        <div className="actions">
+      <PageHeader
+        title="Resellers"
+        subtitle="Each reseller has a customer link into every ERP connection it buys from."
+        actions={
           <button className="erp-btn erp-btn--primary" type="button" onClick={() => setShowForm((v) => !v)}>
             {showForm ? "Cancel" : "Link reseller to connection"}
           </button>
-        </div>
-      </div>
+        }
+      />
       {showForm && (
         <form className="panel stack" onSubmit={handleSubmit}>
           <div className="grid2">
             <div className="field">
-              <label htmlFor="tenantId">Tenant ID</label>
+              <label htmlFor="tenantId">Reseller ID</label>
               <input className="input" id="tenantId" value={form.tenantId} onChange={(e) => setForm({ ...form, tenantId: e.target.value })} required />
             </div>
             <div className="field">
@@ -98,8 +109,22 @@ export function TenantsPage() {
           </div>
         </form>
       )}
+      <div className="toolbar">
+        <div className="search-input">
+          <Search size={15} strokeWidth={2} className="search-input__icon" />
+          <input
+            className="input"
+            type="search"
+            placeholder="Search by reseller, connection, or ERP customer id"
+            style={{ width: 300 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <FilterMenu groups={[{ label: "Status", options: STATUS_OPTIONS, value: status, onChange: (v) => setStatus(v as (typeof STATUS_FILTERS)[number]) }]} />
+      </div>
       {error && <div className="callout callout--danger">Could not load resellers: {error.message}</div>}
-      <DataTable columns={columns} rows={bindings ?? []} rowKey={(b) => b.bindingId} isLoading={isLoading} emptyMessage="No resellers linked yet" />
+      <DataTable columns={columns} rows={rows} rowKey={(b) => b.bindingId} isLoading={isLoading} emptyMessage="No resellers match this filter" pageSize={10} />
     </>
   );
 }

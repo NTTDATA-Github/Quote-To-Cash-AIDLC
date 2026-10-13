@@ -41,8 +41,15 @@ export async function graphqlRequest<TData, TVariables extends Record<string, un
     });
   } catch {
     // fetch() throws a generic TypeError for both "server is down" and "CORS rejected",
-    // with no status code to tell them apart — surface something a user can act on.
-    throw new GraphQLRequestError(`Could not reach the API at ${url}. Check that it is running and reachable.`, []);
+    // with no status code to tell them apart. The detailed, URL-bearing message is only
+    // useful to someone who can act on it — a developer at the console — never to an end
+    // user in production, where it just leaks an internal hostname onto the screen.
+    const detail = `Could not reach the API at ${url}. Check that it is running and reachable.`;
+    if (import.meta.env.DEV) {
+      throw new GraphQLRequestError(detail, []);
+    }
+    console.error(detail);
+    throw new GraphQLRequestError("Could not reach the server right now. Please try again in a moment.", []);
   }
 
   if (res.status === 401) {

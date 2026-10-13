@@ -1,9 +1,15 @@
 # High-Level Design — AdminOps
 
 C4 **container-level** view. Diagram source: [`hld.drawio`](hld.drawio) (open in
-diagrams.net or the VS Code Draw.io extension). It has **two pages**: *(1) Container
-view* and *(2) Onboarding and ERP routing*. The known-gaps table is in this document,
-below.
+diagrams.net or the VS Code Draw.io extension). It has **three pages**: *(1) Container
+view*, *(2) Onboarding and ERP routing*, and *(3) Infrastructure / Deployment (AWS)* —
+the Terraform-provisioned topology: VPC, ALB, ECS Fargate, Aurora, Odoo's own
+ALB+RDS+cluster, ECR, S3+CloudFront for the UI, and the one-time GitHub OIDC
+bootstrap. Page 3 is deployment detail deliberately left out of page 1; for the
+decisions and known gaps behind it (public access, IAM scope, image rebuild rules),
+see [ADR-0020](../adr/0020-terraform-aws-deploy-and-cicd.md) and
+[`docs/deploy-aws.md`](../deploy-aws.md) rather than duplicating them here. The
+known-gaps table below is for the application architecture (pages 1–2).
 
 Scope: major components, their responsibilities, external dependencies, data stores,
 communication paths, and the significant flows and boundaries. It deliberately omits

@@ -5,7 +5,7 @@ import { useDeliveryLog } from "../../hooks/useWebhooks";
 import type { WebhookDelivery } from "../../api/queries/webhooks";
 
 const EVENT_LABEL: Record<string, string> = {
-  OrderSentToErp: "Sent to ERP",
+  OrderSentToErp: "Open",
   OrderConfirmed: "Confirmed",
   OrderClosed: "Closed",
   OrderRejected: "Rejected",

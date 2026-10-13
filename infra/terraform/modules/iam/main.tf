@@ -126,10 +126,15 @@ resource "aws_iam_role" "github_deploy" {
   assume_role_policy = data.aws_iam_policy_document.github_assume[0].json
 }
 
+# AdministratorAccess: `terraform apply` from this role creates/updates every resource in
+# this config (VPC, RDS, IAM, Cognito, Secrets Manager, SNS/SQS, S3, CloudFront, ECR, ECS...),
+# not just ECS/ECR. A hand-picked set of FullAccess policies would need to track every module
+# added here and silently breaks on the next one that's missed. Deliberate, matches ADR-0020's
+# "staging is public/debug-friendly by design" stance — tighten under ADR-0020's "Revisit when"
+# (real customer data onboarded) by replacing this with scoped per-service policies.
 resource "aws_iam_role_policy_attachment" "github_deploy" {
   for_each = local.make_oidc == 1 ? toset([
-    "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser",
-    "arn:aws:iam::aws:policy/AmazonECS_FullAccess",
+    "arn:aws:iam::aws:policy/AdministratorAccess",
   ]) : toset([])
   role       = aws_iam_role.github_deploy[0].name
   policy_arn = each.value

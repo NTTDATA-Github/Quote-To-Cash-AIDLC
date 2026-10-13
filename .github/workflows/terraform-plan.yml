@@ -35,19 +35,13 @@ jobs:
 
       - uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.5"
+          terraform_version: "1.12.2"
 
       - name: fmt
         run: terraform fmt -check -recursive
 
       - name: init
-        run: |
-          terraform init \
-            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
-            -backend-config="key=staging/terraform.tfstate" \
-            -backend-config="region=${{ env.AWS_REGION }}" \
-            -backend-config="dynamodb_table=o2c-tf-locks" \
-            -backend-config="encrypt=true"
+        run: terraform init -backend-config=envs/staging.s3.tfbackend
 
       - name: validate
         run: terraform validate

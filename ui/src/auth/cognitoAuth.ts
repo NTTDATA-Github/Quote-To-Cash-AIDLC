@@ -101,13 +101,21 @@ export async function refreshSession(config: CognitoConfig, refreshToken: string
 }
 
 /** Decode-only (no signature check — the backend re-verifies every request against
- * Cognito's JWKS; this is purely for UI display: whose tenant, which roles). */
-export function decodeIdTokenClaims(idToken: string): { tenantId: string | null; roles: string[] } {
+ * Cognito's JWKS; this is purely for UI display: whose tenant, which roles, and the
+ * identity shown in the user menu). */
+export function decodeIdTokenClaims(idToken: string): {
+  tenantId: string | null;
+  roles: string[];
+  email: string | null;
+  username: string | null;
+} {
   const payload = idToken.split(".")[1];
   const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
   const claims = JSON.parse(json) as Record<string, unknown>;
   return {
     tenantId: typeof claims["custom:tenant_id"] === "string" ? (claims["custom:tenant_id"] as string) : null,
     roles: Array.isArray(claims["cognito:groups"]) ? (claims["cognito:groups"] as string[]) : [],
+    email: typeof claims["email"] === "string" ? (claims["email"] as string) : null,
+    username: typeof claims["cognito:username"] === "string" ? (claims["cognito:username"] as string) : null,
   };
 }

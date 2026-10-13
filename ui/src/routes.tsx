@@ -3,6 +3,7 @@ import { Navigate, createBrowserRouter, useParams } from "react-router-dom";
 import { AppShell } from "./App";
 import { useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./features/auth/LoginPage";
+import { OverviewPage } from "./features/admin/OverviewPage";
 import { NotificationsPage } from "./features/admin/NotificationsPage";
 import { ConnectionsPage } from "./features/admin/ConnectionsPage";
 import { TenantsPage } from "./features/admin/TenantsPage";
@@ -20,7 +21,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 function HomeRedirect() {
-  return <Navigate to="/admin/orders" replace />;
+  return <Navigate to="/admin/overview" replace />;
 }
 
 function OrderRedirect() {
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <HomeRedirect /> },
+      { path: "admin/overview", element: <OverviewPage /> },
       { path: "notifications", element: <Navigate to="/admin/notifications" replace /> },
       { path: "orders/:orderId", element: <OrderRedirect /> },
       { path: "orders/:orderId/events", element: <OrderEventsRedirect /> },

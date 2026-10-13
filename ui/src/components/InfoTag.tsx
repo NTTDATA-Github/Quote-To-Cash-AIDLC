@@ -22,6 +22,7 @@ export function InfoTag({ text }: { text: string }) {
       onFocus={show}
       onMouseLeave={() => setBox(null)}
       onBlur={() => setBox(null)}
+      onClick={(e) => e.stopPropagation()}
     >
       ?
       {box && (

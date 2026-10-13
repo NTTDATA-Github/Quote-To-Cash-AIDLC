@@ -1,11 +1,12 @@
 import type { TimelineEntry } from "../api/queries/orders";
 import { statusLabel } from "../lib/statusLabel";
 
-// The canonical reseller-facing lifecycle (matches ordering/projections/read_models.py
-// STATUS_LABELS on the backend — raw SCREAMING_SNAKE_CASE; statusLabel() renders it).
-// "RETRYING" and "REJECTED"/"CANCELLED" are exceptions overlaid on this sequence, not
-// steps in it — design/README.md's own rule.
-const LIFECYCLE_STEPS = ["SUBMITTED", "VALIDATED", "SENT_TO_ERP", "CONFIRMED", "FULFILLED", "CLOSED"];
+// Orders arrive already adopted from the ERP (OrderObserved -> SENT_TO_ERP in
+// domain/aggregate.py), so Open is the first real step — the old push-flow states
+// (Submitted, Validated, Accepted) never happen for a live order. Fulfilled is a score,
+// not a lifecycle step: a closed order must not paint it as a completed step. "RETRYING"
+// and "REJECTED"/"CANCELLED" are exceptions overlaid on this sequence, not steps in it.
+const LIFECYCLE_STEPS = ["SENT_TO_ERP", "CONFIRMED", "CLOSED"];
 const FAILURE_STATUSES = new Set(["REJECTED", "CANCELLED"]);
 
 function formatTime(iso: string): string {

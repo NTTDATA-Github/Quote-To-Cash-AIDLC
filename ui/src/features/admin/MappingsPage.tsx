@@ -1,8 +1,10 @@
 import { useState, type ChangeEvent, type FormEvent } from "react";
+import { ArrowRight } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
 import { InfoTag } from "../../components/InfoTag";
-import { StatusBadge } from "../../components/StatusBadge";
+import { PageHeader } from "../../components/PageHeader";
+import { StatusBadge, type Role } from "../../components/StatusBadge";
 import type { MappingEntry, MappingJob } from "../../api/queries/mapping";
 import {
   useAdapterRun,
@@ -28,6 +30,15 @@ const STATUS_LABEL: Record<string, string> = {
 
 function statusLabel(status: string): string {
   return STATUS_LABEL[status] ?? status;
+}
+
+// Plain-English read of the 0-100 confidence score, so a non-technical reviewer can
+// judge a row from its color/label alone — the number is still shown, just not the
+// only thing doing the talking.
+function confidenceTier(score: number): { label: string; role: Role } {
+  if (score >= 95) return { label: "High confidence", role: "success" };
+  if (score >= 80) return { label: "Needs review", role: "warning" };
+  return { label: "Low confidence", role: "danger" };
 }
 
 function downloadBlob(filename: string, text: string, mime: string): void {
@@ -110,23 +121,16 @@ export function MappingsPage() {
     setJobId(result.jobId);
   }
 
-  const columns: Column<MappingEntry>[] = [
-    { key: "erp", header: "ERP exposed field", render: (m) => <span className="id">{m.erpField}</span> },
-    { key: "canonical", header: "Our order field", render: (m) => m.canonicalField },
-    { key: "sample", header: "Example", render: (m) => <span className="muted">{m.sampleData}</span> },
-    {
-      key: "confidence",
-      header: (
-        <>
-          Confidence <InfoTag text="0-100, calibrated strict. Treat anything below about 95 as something to check by hand." />
-        </>
-      ),
-      align: "right",
-      render: (m) => `${m.confidence}`,
-    },
-  ];
-
   const mapping = job?.mapping ?? [];
+  // Worst first — the rows that need a human's eyes should be the first thing seen,
+  // not something found by scanning past the fields that are already fine.
+  const sortedMapping = [...mapping].sort((a, b) => a.confidence - b.confidence);
+  const tiers = sortedMapping.map((m) => ({ entry: m, tier: confidenceTier(m.confidence) }));
+  const tierCounts = {
+    high: tiers.filter((t) => t.tier.role === "success").length,
+    review: tiers.filter((t) => t.tier.role === "warning").length,
+    low: tiers.filter((t) => t.tier.role === "danger").length,
+  };
   const isRunning = !!jobId && (!job || job.status === "PENDING" || job.status === "PROCESSING");
 
   const jobColumns: Column<MappingJob>[] = [
@@ -178,16 +182,10 @@ export function MappingsPage() {
 
   return (
     <>
-      <div className="pagehead">
-        <div>
-          <h1>ERP mapping</h1>
-          <p>
-            Match our order fields to the ERP exposed fields. Upload those fields with a few example values, review the
-            proposal, then approve it. Approval sends the mapping to the code generator, which writes the adapter and
-            opens a pull request.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        title="ERP mapping"
+        subtitle="Match our order fields to the ERP exposed fields, review the proposal, then approve it — approval sends the mapping to the code generator, which writes the adapter and opens a pull request."
+      />
 
       <section className="panel stack">
         <h2>Jobs</h2>
@@ -326,7 +324,10 @@ export function MappingsPage() {
       <section className="panel stack">
         <div className="pagehead">
           <div>
-            <h2>2. Review the proposal</h2>
+            <h2>
+              2. Review the proposal{" "}
+              <InfoTag text="Each row reads as a sentence: the field the ERP sends becomes a field on our order. The badge is a plain-English read of the match confidence — check anything marked Needs review or Low confidence by hand before approving." />
+            </h2>
             <p className="hint">
               {job ? (
                 <>
@@ -358,13 +359,45 @@ export function MappingsPage() {
         </div>
         {isRunning && <div className="callout callout--info">Mapping in progress. This can take up to a minute.</div>}
         {job?.status === "FAILED" && <div className="callout callout--danger">Mapping failed: {job.error}</div>}
-        {job?.status === "DONE" && (
-          <DataTable
-            columns={columns}
-            rows={mapping}
-            rowKey={(m) => m.erpField}
-            emptyMessage="None of the ERP exposed fields matched our order fields."
-          />
+        {job?.status === "DONE" && mapping.length === 0 && <p className="hint">None of the ERP exposed fields matched our order fields.</p>}
+        {job?.status === "DONE" && mapping.length > 0 && (
+          <>
+            <div className="statgrid">
+              <div className="stat">
+                <b style={{ color: "var(--status-success-fg)" }}>{tierCounts.high}</b>
+                <span>High confidence</span>
+              </div>
+              <div className="stat">
+                <b style={{ color: "var(--status-warning-fg)" }}>{tierCounts.review}</b>
+                <span>Needs review</span>
+              </div>
+              <div className="stat">
+                <b style={{ color: "var(--status-danger-fg)" }}>{tierCounts.low}</b>
+                <span>Low confidence</span>
+              </div>
+            </div>
+            <div className="mapflow">
+              {tiers.map(({ entry, tier }) => (
+                <div className="mapflow-row" key={entry.erpField}>
+                  <div className="mapflow-field">
+                    <span className="label">The ERP sends</span>
+                    <span className="mapflow-name mono">{entry.erpField}</span>
+                    {entry.sampleData && <span className="mapflow-example muted">e.g. {entry.sampleData}</span>}
+                  </div>
+                  <div className="mapflow-link">
+                    <ArrowRight size={18} strokeWidth={2} />
+                    <span className={`erp-badge erp-badge--${tier.role}`}>
+                      {tier.label} · {entry.confidence}%
+                    </span>
+                  </div>
+                  <div className="mapflow-field mapflow-field--ours">
+                    <span className="label">Becomes</span>
+                    <span className="mapflow-name">{entry.canonicalField}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </section>
 

@@ -3,30 +3,19 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { OrderTimeline } from "../../components/OrderTimeline";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useAuth } from "../../auth/AuthContext";
-import { useCancelOrder, useOrder } from "../../hooks/useOrders";
+import { useOrder } from "../../hooks/useOrders";
 import { formatMoney } from "../../lib/money";
 import { statusLabel } from "../../lib/statusLabel";
-
-const CANCELLABLE = new Set(["SUBMITTED", "VALIDATED"]);
 
 export function OrderDetailPage() {
   const { orderId = "" } = useParams();
   const navigate = useNavigate();
   const { roles } = useAuth();
   const { data: order, isLoading, error } = useOrder(orderId);
-  const cancelOrder = useCancelOrder();
 
   if (isLoading) return <p className="muted">Loading…</p>;
   if (error) return <div className="callout callout--danger">Could not load order: {error.message}</div>;
   if (!order) return <p className="muted">Order not found.</p>;
-
-  const canCancel = CANCELLABLE.has(order.status);
-
-  function handleCancel() {
-    const reason = window.prompt("Reason for cancelling this order?");
-    if (!reason) return;
-    cancelOrder.mutate({ orderId, reason });
-  }
 
   return (
     <>
@@ -36,11 +25,6 @@ export function OrderDetailPage() {
             Order {order.orderId} <StatusBadge status={statusLabel(order.status)} />
           </h1>
           <p>Your reference {order.clientReference}.</p>
-        </div>
-        <div className="actions">
-          <button className="erp-btn erp-btn--danger" type="button" disabled={!canCancel || cancelOrder.isPending} onClick={handleCancel}>
-            Cancel order
-          </button>
         </div>
       </div>
       <div className="split">

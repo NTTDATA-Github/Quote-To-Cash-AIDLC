@@ -1,4 +1,4 @@
-type Role = "neutral" | "progress" | "success" | "warning" | "danger";
+export type Role = "neutral" | "progress" | "success" | "warning" | "danger";
 
 // design/README.md "Status badge roles" — the exact, closed vocabulary this app uses.
 // Order/fulfillment/delivery/invoice statuses come from the backend as raw
@@ -8,14 +8,12 @@ type Role = "neutral" | "progress" | "success" | "warning" | "danger";
 // mapped here.
 const ROLE_BY_STATUS: Record<string, Role> = {
   Draft: "neutral",
-  Closed: "neutral",
   Paused: "neutral",
   PAUSED: "neutral",
-  Submitted: "progress",
-  Validated: "progress",
-  "Sent to ERP": "progress",
+  Open: "progress",
+  Confirmed: "progress",
   Onboarding: "progress",
-  Confirmed: "success",
+  Closed: "success",
   Fulfilled: "success",
   Delivered: "success",
   Active: "success",
@@ -38,6 +36,13 @@ const ROLE_BY_STATUS: Record<string, Role> = {
 
 function roleFor(status: string): Role {
   return ROLE_BY_STATUS[status] ?? "neutral";
+}
+
+/** The design-system badge role for a status, exported so dashboards can classify and
+ * colour-group statuses with the same vocabulary the badge uses. Accepts either a Title
+ * Case label (from lib/statusLabel) or a raw enum value — both are in ROLE_BY_STATUS. */
+export function statusRole(status: string): Role {
+  return roleFor(status);
 }
 
 /** design/design-system/components/StatusBadge.md — word + glyph, never color alone. */

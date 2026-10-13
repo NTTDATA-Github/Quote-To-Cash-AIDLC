@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
+import { Search } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
 import { InfoTag } from "../../components/InfoTag";
+import { PageHeader } from "../../components/PageHeader";
 import {
   useConnections,
   useCreateSubsidiary,
@@ -97,27 +99,36 @@ export function SubsidiariesPage() {
   const EMPTY = { name: "", country: "", language: "" };
   const [form, setForm] = useState(EMPTY);
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const rows = (subsidiaries ?? []).filter((s) =>
+    [s.subsidiaryId, s.name, s.country, s.language].join(" ").toLowerCase().includes(search.toLowerCase()),
+  );
 
   const columns: Column<Subsidiary>[] = [
     {
       key: "id",
       header: <ColumnHeader label="Id" help="Our id for this distributor company, such as sub_demo. This is not a number from the ERP." />,
       render: (c) => <span className="id">{c.subsidiaryId}</span>,
+      sortValue: (c) => c.subsidiaryId,
     },
     {
       key: "name",
       header: <ColumnHeader label="Name" help="The name shown in AdminOps, such as Demo subsidiary." />,
       render: (c) => c.name,
+      sortValue: (c) => c.name,
     },
     {
       key: "country",
       header: <ColumnHeader label="Country" help="Two-letter country code we store, such as US. It is not read from the ERP and does not decide which orders are kept." />,
       render: (c) => c.country,
+      sortValue: (c) => c.country,
     },
     {
       key: "language",
       header: <ColumnHeader label="Language" help="Language code we store, such as en_US. It is not read from the ERP and does not decide which orders are kept." />,
       render: (c) => c.language,
+      sortValue: (c) => c.language,
     },
     {
       key: "connection",
@@ -150,19 +161,15 @@ export function SubsidiariesPage() {
 
   return (
     <>
-      <div className="pagehead">
-        <div>
-          <h1>Subsidiaries</h1>
-          <p>
-            Each row is one distributor company. Add the login on ERP connections first, then select it in ERP connection. The number in ERP company number is the company id inside that ERP. A sales order is kept only when the quotation uses that same company.
-          </p>
-        </div>
-        <div className="actions">
+      <PageHeader
+        title="Subsidiaries"
+        subtitle="Each row is one distributor company. Add the login on ERP connections first, then select it in ERP connection."
+        actions={
           <button className="erp-btn erp-btn--primary" type="button" onClick={() => setShowForm((v) => !v)}>
             {showForm ? "Cancel" : "Add subsidiary"}
           </button>
-        </div>
-      </div>
+        }
+      />
       {showForm && (
         <form className="panel stack" onSubmit={handleSubmit}>
           <div className="grid2">
@@ -187,8 +194,21 @@ export function SubsidiariesPage() {
           </div>
         </form>
       )}
+      <div className="toolbar">
+        <div className="search-input">
+          <Search size={15} strokeWidth={2} className="search-input__icon" />
+          <input
+            className="input"
+            type="search"
+            placeholder="Search by id, name, country, or language"
+            style={{ width: 300 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
       {error && <div className="callout callout--danger">Could not load subsidiaries: {error.message}</div>}
-      <DataTable columns={columns} rows={subsidiaries ?? []} rowKey={(c) => c.subsidiaryId} isLoading={isLoading} emptyMessage="No subsidiaries yet" />
+      <DataTable columns={columns} rows={rows} rowKey={(c) => c.subsidiaryId} isLoading={isLoading} emptyMessage="No subsidiaries match this filter" pageSize={10} />
     </>
   );
 }

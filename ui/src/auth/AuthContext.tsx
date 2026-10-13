@@ -28,6 +28,8 @@ interface AuthState {
   idToken: string | null;
   tenantId: string | null;
   roles: string[];
+  email: string | null;
+  username: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
@@ -96,12 +98,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [tokens, applyTokens, signOut]);
 
-  const claims = useMemo(() => (tokens ? decodeIdTokenClaims(tokens.idToken) : { tenantId: null, roles: [] }), [tokens]);
+  const claims = useMemo(
+    () => (tokens ? decodeIdTokenClaims(tokens.idToken) : { tenantId: null, roles: [], email: null, username: null }),
+    [tokens],
+  );
 
   const value: AuthState = {
     idToken: tokens?.idToken ?? null,
     tenantId: claims.tenantId,
     roles: claims.roles,
+    email: claims.email,
+    username: claims.username,
     isAuthenticated: tokens !== null,
     isLoading,
     error,

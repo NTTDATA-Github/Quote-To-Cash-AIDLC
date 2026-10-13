@@ -10,3 +10,8 @@ output "db_endpoint" {
 output "service_name" {
   value = aws_ecs_service.odoo.name
 }
+
+output "image" {
+  description = "The image this apply ran with (not raw var.odoo_image — the resolved value main.tf passed in). CI reads this to keep reapplying it when it isn't rebuilding Odoo."
+  value       = var.odoo_image
+}

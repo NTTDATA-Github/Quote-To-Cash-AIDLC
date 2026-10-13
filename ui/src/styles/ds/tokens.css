@@ -1,15 +1,27 @@
 :root {
-  --surface: #f6f7f9;
+  --surface: #f7f9fc;
   --surface-raised: #ffffff;
-  --surface-sunken: #eef1f5;
+  --surface-sunken: #eef1f6;
   --line: #e1e4ea;
   --line-strong: #c3c9d3;
-  --ink: #171a21;
+  --ink: #141821;
   --ink-muted: #5c6270;
   --brand: #0d6e63;
   --brand-hover: #0a5a51;
   --brand-soft: #e3f3f0;
   --on-brand: #ffffff;
+
+  /* Visual-identity additions (Increment 8 — operator console). Not from the original
+     mockups: an accent, gradients and richer elevation to make the console read clearly
+     as a product rather than a bare form set. Dark-theme values live in the block below. */
+  --accent: #4f46e5;
+  --accent-soft: #ebeafe;
+  --brand-grad: linear-gradient(135deg, #0d6e63 0%, #0ea5a0 55%, #22b8cf 100%);
+  --hero-grad: linear-gradient(135deg, #0b3f3a 0%, #0d6e63 48%, #116f88 100%);
+  --accent-grad: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  --sheen: radial-gradient(1200px 400px at 12% -10%, rgba(34, 184, 207, 0.18), transparent 60%);
+  --ring: 0 0 0 2px var(--surface-raised), 0 0 0 4px var(--brand);
+
   --status-neutral-fg: #4c5261;
   --status-neutral-bg: #eef0f4;
   --status-progress-fg: #1d5fc4;
@@ -20,21 +32,71 @@
   --status-warning-bg: #fdf0d2;
   --status-danger-fg: #c0291c;
   --status-danger-bg: #fde3df;
+
   --shadow-overlay: 0 12px 32px rgba(16, 24, 40, 0.16);
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.06);
+  --shadow-lift: 0 2px 4px rgba(16, 24, 40, 0.06), 0 12px 28px rgba(16, 24, 40, 0.10);
+
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
+  --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --radius-xl: 18px;
   --transition: 120ms ease;
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
 }
+
+/* Dark theme. Set data-theme="dark" on <html>; the ThemeProvider does this and persists
+   the choice. design/README.md requires both themes to work. */
+[data-theme="dark"] {
+  --surface: #0d1017;
+  /* raised must be the lightest of the three (it's what "pops forward" — panels, cards,
+     the sidebar) and sunken the most recessed, same ordering as the light theme. These
+     two were swapped: raised (#161b25) was *darker* than sunken (#1f2530), so every
+     panel/card in dark mode sat almost flush with its own background — least visible
+     exactly where elevation matters most (panels on the page, cards on Kanban columns). */
+  --surface-raised: #1f2530;
+  --surface-sunken: #161b25;
+  --line: #262d3a;
+  --line-strong: #39414f;
+  --ink: #eef1f6;
+  --ink-muted: #9aa3b2;
+  --brand: #2fd4c4;
+  --brand-hover: #58e0d3;
+  --brand-soft: #113a37;
+  --on-brand: #06201e;
+
+  --accent: #a5a0fb;
+  --accent-soft: #241f52;
+  --brand-grad: linear-gradient(135deg, #0b4a44 0%, #0ea5a0 55%, #22b8cf 100%);
+  --hero-grad: linear-gradient(135deg, #0a2f2b 0%, #0d5f58 50%, #0e5064 100%);
+  --accent-grad: linear-gradient(135deg, #6d64f0 0%, #9b6bf0 100%);
+  --sheen: radial-gradient(1200px 400px at 12% -10%, rgba(34, 184, 207, 0.14), transparent 60%);
+  --ring: 0 0 0 2px var(--surface-raised), 0 0 0 4px var(--brand);
+
+  --status-neutral-fg: #c3cad6;
+  --status-neutral-bg: #262d3a;
+  --status-progress-fg: #8fb7ff;
+  --status-progress-bg: #16294a;
+  --status-success-fg: #74d99f;
+  --status-success-bg: #0f2f20;
+  --status-warning-fg: #f0c164;
+  --status-warning-bg: #352709;
+  --status-danger-fg: #f09a90;
+  --status-danger-bg: #38100c;
+
+  --shadow-overlay: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.3), 0 14px 30px rgba(0, 0, 0, 0.45);
+}
+
 .page-title { font-family: var(--font-sans); font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.01em; }
 .title { font-family: var(--font-sans); font-size: 18px; line-height: 26px; font-weight: 600; }
 .heading { font-family: var(--font-sans); font-size: 16px; line-height: 24px; font-weight: 600; }

@@ -71,16 +71,18 @@ module "iam" {
 }
 
 module "compute" {
-  source               = "./modules/compute"
-  count                = local.aws_count
-  prefix               = local.prefix
-  region               = var.region
-  vpc_id               = module.network[0].vpc_id
-  subnet_ids           = module.network[0].subnet_ids
-  app_sg_id            = module.network[0].app_sg_id
-  alb_sg_id            = module.network[0].alb_sg_id
-  api_image            = var.api_image
-  worker_image         = var.worker_image
+  source     = "./modules/compute"
+  count      = local.aws_count
+  prefix     = local.prefix
+  region     = var.region
+  vpc_id     = module.network[0].vpc_id
+  subnet_ids = module.network[0].subnet_ids
+  app_sg_id  = module.network[0].app_sg_id
+  alb_sg_id  = module.network[0].alb_sg_id
+  # Empty var = first-ever apply before any image was pushed. Falls back to the
+  # same registry:bootstrap convention module.odoo already uses below.
+  api_image            = var.api_image != "" ? var.api_image : "${module.registry[0].api_repository_url}:bootstrap"
+  worker_image         = var.worker_image != "" ? var.worker_image : "${module.registry[0].worker_repository_url}:bootstrap"
   api_desired_count    = var.api_desired_count
   worker_desired_count = var.worker_desired_count
   task_cpu             = var.task_cpu
@@ -92,6 +94,14 @@ module "compute" {
   worker_log_group     = module.observability[0].worker_log_group
   app_env              = local.app_env
   acm_certificate_arn  = var.acm_certificate_arn
+}
+
+module "ui" {
+  source       = "./modules/ui"
+  count        = local.aws_count
+  prefix       = local.prefix
+  account_id   = data.aws_caller_identity.current[0].account_id
+  alb_dns_name = module.compute[0].alb_dns_name
 }
 
 module "odoo" {

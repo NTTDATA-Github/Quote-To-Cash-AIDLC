@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
+import { PageHeader } from "../../components/PageHeader";
 import { useOperatorOrder } from "../../hooks/useAdmin";
 import { useOrderEvents } from "../../hooks/useEvents";
 import type { OrderEvent } from "../../api/queries/events";
@@ -23,15 +24,20 @@ export function OrderEventsPage() {
 
   return (
     <>
-      <div className="pagehead">
-        <div>
-          <h1>Event stream {orderId}</h1>
-          <p>
+      <PageHeader
+        eyebrow={
+          <>
+            <Link to="/admin/orders">Orders</Link> / <Link to={`/admin/orders/${orderId}`}>{orderId}</Link>
+          </>
+        }
+        title="Event stream"
+        subtitle={
+          <>
             Every event recorded for this order, in the order it happened.
-            {order && <> Tenant {order.tenantId}, currently {order.status}.</>}
-          </p>
-        </div>
-      </div>
+            {order && <> Reseller {order.tenantId}, currently {order.status}.</>}
+          </>
+        }
+      />
       {error && <div className="callout callout--danger">Could not load events: {error.message}</div>}
       <div className="split">
         <div className="erp-table-wrap">
@@ -87,9 +93,6 @@ export function OrderEventsPage() {
           )}
         </section>
       </div>
-      <p>
-        <Link to={`/orders/${orderId}`}>Back to order</Link>
-      </p>
     </>
   );
 }

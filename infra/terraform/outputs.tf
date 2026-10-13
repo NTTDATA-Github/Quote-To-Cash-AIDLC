@@ -35,6 +35,11 @@ output "ecr_odoo_repository_url" {
   value       = one(module.registry[*].odoo_repository_url)
 }
 
+output "odoo_image" {
+  description = "The image Odoo's task definition currently runs. CI re-passes this on applies that aren't rebuilding Odoo, so an apply never resets it to the (unpushed) :bootstrap default."
+  value       = one(module.odoo[*].image)
+}
+
 output "alb_dns_name" {
   description = "Public ALB DNS name — the app's entry point."
   value       = one(module.compute[*].alb_dns_name)
@@ -94,4 +99,19 @@ output "app_security_group_id" {
 output "api_task_definition_arn" {
   description = "api task definition ARN (reused with a command override to run migrations)."
   value       = one(module.compute[*].api_task_definition_arn)
+}
+
+output "ui_bucket_name" {
+  description = "S3 bucket the UI build (ui/dist) is synced to."
+  value       = one(module.ui[*].bucket_name)
+}
+
+output "ui_cloudfront_domain_name" {
+  description = "CloudFront domain the UI is served from. Open https://<this>."
+  value       = one(module.ui[*].cloudfront_domain_name)
+}
+
+output "ui_cloudfront_distribution_id" {
+  description = "CloudFront distribution id, invalidated after every UI deploy."
+  value       = one(module.ui[*].cloudfront_distribution_id)
 }

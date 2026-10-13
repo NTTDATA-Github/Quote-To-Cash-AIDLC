@@ -1,12 +1,17 @@
 import { useState, type FormEvent } from "react";
+import { Search } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
+import { FilterMenu } from "../../components/FilterMenu";
 import { InfoTag } from "../../components/InfoTag";
+import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import { useConnections, usePauseConnection, useRegisterConnection, useResumeConnection } from "../../hooks/useAdmin";
 import type { Connection } from "../../api/queries/admin";
 
 const EMPTY_FORM = { erpType: "odoo", instanceLabel: "", baseUrl: "", database: "", username: "", secretRef: "", webhookSecretRef: "" };
+const STATUS_FILTERS = ["all", "ACTIVE", "PAUSED"] as const;
+const STATUS_OPTIONS = STATUS_FILTERS.map((s) => ({ value: s, label: s === "all" ? "All" : s === "ACTIVE" ? "Active" : "Paused" }));
 
 export function ConnectionsPage() {
   const { data: connections, isLoading, error } = useConnections();
@@ -15,13 +20,24 @@ export function ConnectionsPage() {
   const resumeConnection = useResumeConnection();
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]>("all");
+
+  const rows = (connections ?? [])
+    .filter((c) => status === "all" || c.status === status)
+    .filter((c) => [c.connectionId, c.instanceLabel, c.erpType].join(" ").toLowerCase().includes(search.toLowerCase()));
 
   const columns: Column<Connection>[] = [
-    { key: "id", header: "Connection", render: (c) => <span className="id">{c.connectionId}</span> },
-    { key: "label", header: "Label", render: (c) => c.instanceLabel },
-    { key: "erp", header: "ERP", render: (c) => c.erpType },
-    { key: "status", header: "Status", render: (c) => <StatusBadge status={c.status} /> },
-    { key: "webhook", header: "Webhook secret", render: (c) => (c.hasWebhookSecret ? "Configured" : "Not set") },
+    { key: "id", header: "Connection", render: (c) => <span className="id">{c.connectionId}</span>, sortValue: (c) => c.connectionId },
+    { key: "label", header: "Label", render: (c) => c.instanceLabel, sortValue: (c) => c.instanceLabel },
+    { key: "erp", header: "ERP", render: (c) => c.erpType, sortValue: (c) => c.erpType },
+    { key: "status", header: "Status", render: (c) => <StatusBadge status={c.status} />, sortValue: (c) => c.status },
+    {
+      key: "webhook",
+      header: "Webhook secret",
+      render: (c) => (c.hasWebhookSecret ? "Configured" : "Not set"),
+      sortValue: (c) => (c.hasWebhookSecret ? 1 : 0),
+    },
     {
       key: "actions",
       header: "",
@@ -62,17 +78,15 @@ export function ConnectionsPage() {
 
   return (
     <>
-      <div className="pagehead">
-        <div>
-          <h1>ERP connections</h1>
-          <p>Each connection is one ERP instance. Credentials are stored encrypted and never shown after saving.</p>
-        </div>
-        <div className="actions">
+      <PageHeader
+        title="ERP connections"
+        subtitle="Each connection is one ERP instance. Credentials are stored encrypted and never shown after saving."
+        actions={
           <button className="erp-btn erp-btn--primary" type="button" onClick={() => setShowForm((v) => !v)}>
             {showForm ? "Cancel" : "Add connection"}
           </button>
-        </div>
-      </div>
+        }
+      />
       {showForm && (
         <form className="panel stack" onSubmit={handleSubmit}>
           <div className="grid2">
@@ -125,8 +139,22 @@ export function ConnectionsPage() {
           </div>
         </form>
       )}
+      <div className="toolbar">
+        <div className="search-input">
+          <Search size={15} strokeWidth={2} className="search-input__icon" />
+          <input
+            className="input"
+            type="search"
+            placeholder="Search by connection, label, or ERP"
+            style={{ width: 280 }}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <FilterMenu groups={[{ label: "Status", options: STATUS_OPTIONS, value: status, onChange: (v) => setStatus(v as (typeof STATUS_FILTERS)[number]) }]} />
+      </div>
       {error && <div className="callout callout--danger">Could not load connections: {error.message}</div>}
-      <DataTable columns={columns} rows={connections ?? []} rowKey={(c) => c.connectionId} isLoading={isLoading} emptyMessage="No connections yet" />
+      <DataTable columns={columns} rows={rows} rowKey={(c) => c.connectionId} isLoading={isLoading} emptyMessage="No connections match this filter" pageSize={10} />
     </>
   );
 }
