@@ -28,6 +28,7 @@ def _settings() -> Settings:
         domain_topic_arn="arn:aws:sns:us-east-1:000000000000:t.fifo",
         erp_adapter_mode="stub",
         erp_odoo_timeout_seconds=5.0,
+        erp_jsonplaceholder_demo_erp_timeout_seconds=5.0,
         log_level="INFO",
         reconcile_interval_seconds=900,
         worker_roles=frozenset(),

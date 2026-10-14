@@ -16,6 +16,7 @@ class ErpType(str, Enum):
     checklist (adapter class, status mapper, registry entry, then this enum member)."""
 
     ODOO = "ODOO"
+    JSONPLACEHOLDER_DEMO_ERP = "JSONPLACEHOLDER_DEMO_ERP"
 
 
 class ConnectionStatus(str, Enum):

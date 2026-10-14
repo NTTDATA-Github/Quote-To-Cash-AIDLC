@@ -38,10 +38,30 @@ def _map_odoo(fields: dict[str, str]) -> CanonicalStatus | None:
     return None
 
 
+def _map_jsonplaceholder_demo_erp(fields: dict[str, str]) -> CanonicalStatus | None:
+    """JSONPlaceholder Demo ERP's public API (`/posts`, `/comments`, `/albums`,
+    `/photos`, `/todos`, `/users`) has no order-lifecycle/status concept at all —
+    nothing in its publicly documented schema plays the role of Odoo's `state` or
+    ERPNext's `status`. `JsonPlaceholderDemoErpAdapter.fetch_status` reads whatever this
+    *account's* own order record returns in a `status` key (see that adapter for the
+    `GET /posts/{id}` call this comes from).
+
+    TODO(account-specific, needs a live account or its API docs): the real field name
+    this account's own schema uses for order status (if `status` is even right) and,
+    more importantly, the actual value vocabulary (e.g. is "closed" spelled that way? is
+    there a distinct cancelled value, or is a cancelled order just deleted?) are not
+    knowable from JSONPlaceholder's public documentation — there is nothing to read
+    them from. Never guess at those values: until a human fills this in from the real
+    account, every status value maps to "no transition" rather than a made-up guess.
+    """
+    return None
+
+
 # The one place a new ERP's status mapping is registered. Keyed by the same string an
 # `ErpConnection.erp_type`/`ErpTarget.erp_type` carries (upper-cased).
 STATUS_MAPPERS: dict[str, StatusMapper] = {
     "ODOO": _map_odoo,
+    "JSONPLACEHOLDER_DEMO_ERP": _map_jsonplaceholder_demo_erp,
 }
 
 

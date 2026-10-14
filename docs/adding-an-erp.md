@@ -1,7 +1,8 @@
 # Adding a new ERP
 
-The platform currently has one registered ERP: **Odoo**. This is the checklist for
-adding another one (ERPNext, SAP, NetSuite, …) — four files, no scattered edits.
+The platform currently has two registered ERPs: **Odoo** and **JSONPlaceholder Demo
+ERP** (see `docs/erps/README.md` for both). This is the checklist for adding another one
+(ERPNext, SAP, NetSuite, …) — four files, no scattered edits.
 
 ## The four touch points
 

@@ -34,6 +34,8 @@ class Settings:
     erp_adapter_mode: str
     # OdooAdapter-specific; a new ERP adapter gets its own timeout setting if it needs one
     erp_odoo_timeout_seconds: float
+    # JsonPlaceholderDemoErpAdapter-specific — its own setting, not reused from Odoo's.
+    erp_jsonplaceholder_demo_erp_timeout_seconds: float
     log_level: str
     reconcile_interval_seconds: int
     worker_roles: frozenset[str]  # which of {order-processing, order-delivery,
@@ -79,6 +81,9 @@ def get_settings() -> Settings:
         ),
         erp_adapter_mode=os.environ.get("ERP_ADAPTER_MODE", "real"),
         erp_odoo_timeout_seconds=float(os.environ.get("ERP_ODOO_TIMEOUT_SECONDS", "10")),
+        erp_jsonplaceholder_demo_erp_timeout_seconds=float(
+            os.environ.get("ERP_JSONPLACEHOLDER_DEMO_ERP_TIMEOUT_SECONDS", "10")
+        ),
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         reconcile_interval_seconds=int(os.environ.get("RECONCILE_INTERVAL_SECONDS", "900")),
         worker_roles=_parse_worker_roles(os.environ.get("WORKER_ROLE", "all")),

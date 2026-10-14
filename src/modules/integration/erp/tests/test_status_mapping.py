@@ -26,6 +26,16 @@ def test_mapper_signature_is_a_field_bag_not_a_fixed_arity() -> None:
     assert map_native_status("ODOO", {}) is None
 
 
+def test_jsonplaceholder_demo_erp_status_mapping_is_registered_but_maps_nothing_yet() -> None:
+    """JSONPlaceholder Demo ERP is registered (unlike ERP_NEXT/SAP below) but its status
+    mapper deliberately returns no transition for any input — the real status field
+    name/values are account-specific and not knowable from JSONPlaceholder's public API
+    docs (see `_map_jsonplaceholder_demo_erp`'s TODO). This must stay safe, not raise."""
+    assert map_native_status("JSONPLACEHOLDER_DEMO_ERP", {"status": "closed"}) is None
+    assert map_native_status("JSONPLACEHOLDER_DEMO_ERP", {}) is None
+    assert map_native_status("jsonplaceholder_demo_erp", {"status": "anything"}) is None
+
+
 def test_unregistered_erp_type_is_none_never_raises() -> None:
     """ERP_NEXT and SAP are both currently unregistered (see STATUS_MAPPERS) — this is
     the behavior a new, not-yet-wired-up ERP type must have: safely ignored, not an

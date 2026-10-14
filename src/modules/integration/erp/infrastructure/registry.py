@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .jsonplaceholder_demo_erp_adapter import JsonPlaceholderDemoErpAdapter
 from .odoo_adapter import OdooAdapter
 
 if TYPE_CHECKING:
@@ -29,4 +30,7 @@ def build_adapter_registry(settings: Settings) -> dict[str, ErpAdapter]:
     reconstructing an HTTP-client-equivalent on every delivery/reconcile call)."""
     return {
         "ODOO": OdooAdapter(timeout_seconds=settings.erp_odoo_timeout_seconds),
+        "JSONPLACEHOLDER_DEMO_ERP": JsonPlaceholderDemoErpAdapter(
+            timeout_seconds=settings.erp_jsonplaceholder_demo_erp_timeout_seconds
+        ),
     }

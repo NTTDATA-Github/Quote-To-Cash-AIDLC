@@ -48,6 +48,7 @@ def _postgres_settings() -> Settings:
     from src.shared.config import get_settings
 
     base = get_settings()  # picks up DATABASE_URL etc. already set for this process
+    jsonplaceholder_timeout = base.erp_jsonplaceholder_demo_erp_timeout_seconds
     return Settings(
         profile="postgres",
         database_url=base.database_url,
@@ -56,6 +57,7 @@ def _postgres_settings() -> Settings:
         domain_topic_arn=base.domain_topic_arn,
         erp_adapter_mode="stub",
         erp_odoo_timeout_seconds=base.erp_odoo_timeout_seconds,
+        erp_jsonplaceholder_demo_erp_timeout_seconds=jsonplaceholder_timeout,
         log_level=base.log_level,
         reconcile_interval_seconds=base.reconcile_interval_seconds,
         worker_roles=base.worker_roles,

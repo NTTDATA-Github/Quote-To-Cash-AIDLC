@@ -19,6 +19,7 @@ Generic steps that are the same for every ERP stay outside this folder:
 | ERP | Status | Folder |
 |---|---|---|
 | Odoo | Live | [odoo/](./odoo/supply-chain-check.md) |
+| JSONPlaceholder Demo ERP | Live | [jsonplaceholder-demo-erp/](./jsonplaceholder-demo-erp/supply-chain-check.md) |
 | NetSuite | Not registered | — |
 | SAP | Not registered | — |
 
