@@ -18,6 +18,10 @@ reference material when you need it.
 - **[architecture/hld.md](architecture/hld.md)** — the C4 container diagram and the
   component/data-ownership tables (diagram source: `architecture/hld.drawio`).
 - **[database-schema.md](database-schema.md)** — every table and column.
+- **[state-machines-and-lifecycles.md](state-machines-and-lifecycles.md)** — every stateful
+  lifecycle in the code: the `Order` state machine (states, guarded transitions, orthogonal
+  fulfillment/delivery/invoice dimensions) plus the record-only aggregates and the CRUD
+  status lifecycles (quote, mapping job, connection, binding, outbound webhook delivery).
 - **[event-sourcing-explained.md](event-sourcing-explained.md)** — a plain-language primer
   on why the transactional aggregates are stored as events (and why reference data isn't).
 - **Integration**

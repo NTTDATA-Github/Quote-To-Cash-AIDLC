@@ -107,8 +107,8 @@ textarea.input { height: auto; padding: var(--space-2) var(--space-3); }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); align-items: start; }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--space-6); align-items: start; }
 .stack { display: flex; flex-direction: column; gap: var(--space-6); }
-.kv { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: var(--space-2) var(--space-3); margin: 0; }
-.kv dt { color: var(--ink-muted); }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-2) var(--space-3); margin: 0; align-items: baseline; }
+.kv dt { color: var(--ink-muted); white-space: nowrap; }
 .kv dd { margin: 0; }
 .statgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
 .stat { padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-card); display: flex; flex-direction: column; gap: 2px; }

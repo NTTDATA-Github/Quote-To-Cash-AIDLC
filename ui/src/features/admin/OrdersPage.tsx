@@ -106,7 +106,7 @@ export function OrdersPage() {
     <>
       <PageHeader
         title="Orders"
-        subtitle="Every order across every reseller — for debugging, not the reseller's own view."
+        subtitle="Every order across every reseller."
         actions={
           <div className="viewtoggle" role="group" aria-label="View">
             <button

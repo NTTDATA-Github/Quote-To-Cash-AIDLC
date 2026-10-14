@@ -101,6 +101,21 @@ export function MappingsPage() {
     if (file) setCsv(await file.text());
   }
 
+  // Clicking a job row pins the Review/Approve sections to that job (by design, so you
+  // can go back and inspect past jobs) — this is the way out of that, back to a blank
+  // proposal, without a page reload.
+  function startNewMapping() {
+    setJobId(null);
+    setApproved(false);
+    setSource("oneoff");
+    setSelectedSchema("");
+    setNewSchemaName("");
+    setNewSchemaCsv("");
+    setOneoffCsv("");
+    setErpName("");
+    setSampleFiles([]);
+  }
+
   async function handleRegister() {
     await registerSchema.mutateAsync({ name: newSchemaName.trim(), csvText: newSchemaCsv });
     setSource("registered");
@@ -188,7 +203,14 @@ export function MappingsPage() {
       />
 
       <section className="panel stack">
-        <h2>Jobs</h2>
+        <div className="panel-head">
+          <h2>Jobs</h2>
+          {jobId && (
+            <button className="erp-btn erp-btn--ghost erp-btn--sm" type="button" onClick={startNewMapping}>
+              New mapping
+            </button>
+          )}
+        </div>
         {jobsError && <div className="callout callout--danger">Could not load jobs: {jobsError.message}</div>}
         <DataTable
           columns={jobColumns}
