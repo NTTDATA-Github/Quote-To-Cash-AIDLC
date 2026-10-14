@@ -51,6 +51,10 @@ class Settings:
     # erp-agent-service the "approve & implement" action hands an approved mapping to.
     mapping_bedrock_model_id: str
     agent_service_url: str
+    # JsonPlaceholderDemoAdapter-specific (its own timeout, not reused from Odoo's) —
+    # defaulted so existing `Settings(...)` call sites don't all need updating for a
+    # second ERP's adapter-local knob.
+    erp_jsonplaceholder_demo_timeout_seconds: float = 10.0
 
 
 def _parse_worker_roles(raw: str) -> frozenset[str]:
@@ -96,4 +100,7 @@ def get_settings() -> Settings:
             "MAPPING_BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         ),
         agent_service_url=os.environ.get("AGENT_SERVICE_URL", "http://localhost:8002"),
+        erp_jsonplaceholder_demo_timeout_seconds=float(
+            os.environ.get("ERP_JSONPLACEHOLDER_DEMO_TIMEOUT_SECONDS", "10")
+        ),
     )

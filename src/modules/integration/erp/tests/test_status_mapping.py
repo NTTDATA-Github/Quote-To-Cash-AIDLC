@@ -26,6 +26,21 @@ def test_mapper_signature_is_a_field_bag_not_a_fixed_arity() -> None:
     assert map_native_status("ODOO", {}) is None
 
 
+def test_jsonplaceholder_demo_status_mapping() -> None:
+    assert (
+        map_native_status("JSONPLACEHOLDER_DEMO", {"completed": "true"})
+        is CanonicalStatus.CLOSED
+    )
+    assert (
+        map_native_status("JSONPLACEHOLDER_DEMO", {"completed": "false"})
+        is CanonicalStatus.CONFIRMED
+    )
+    # No native concept of cancellation (TODO in `_map_jsonplaceholder_demo`) — no field
+    # value here ever produces CANCELLED.
+    assert map_native_status("JSONPLACEHOLDER_DEMO", {}) is None
+    assert map_native_status("JSONPLACEHOLDER_DEMO", {"completed": "cancelled"}) is None
+
+
 def test_unregistered_erp_type_is_none_never_raises() -> None:
     """ERP_NEXT and SAP are both currently unregistered (see STATUS_MAPPERS) — this is
     the behavior a new, not-yet-wired-up ERP type must have: safely ignored, not an

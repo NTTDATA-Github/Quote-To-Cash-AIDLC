@@ -19,6 +19,7 @@ Generic steps that are the same for every ERP stay outside this folder:
 | ERP | Status | Folder |
 |---|---|---|
 | Odoo | Live | [odoo/](./odoo/supply-chain-check.md) |
+| JSONPlaceholder Demo | Live | [jsonplaceholder-demo.md](./jsonplaceholder-demo.md) |
 | NetSuite | Not registered | — |
 | SAP | Not registered | — |
 
@@ -28,4 +29,7 @@ Generic steps that are the same for every ERP stay outside this folder:
 2. Fill the three files from that ERP's adapter and one real sandbox order.
 3. Add a row to the table above.
 
-`odoo.md` at the top of this folder is a pointer to `odoo/`. Do not add a new ERP as a single file.
+`odoo.md` at the top of this folder is a pointer to `odoo/`. Do not add a new ERP as a single file —
+`jsonplaceholder-demo.md` is the one deliberate exception: it is not a real ERP account (no login,
+no webhook, no sandbox order to click through), so `webhook.md`/`supply-chain-check.md` would be
+empty shells; its one page covers the same headings as `_template/README.md` instead.

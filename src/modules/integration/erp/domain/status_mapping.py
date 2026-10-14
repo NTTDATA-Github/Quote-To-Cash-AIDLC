@@ -38,10 +38,34 @@ def _map_odoo(fields: dict[str, str]) -> CanonicalStatus | None:
     return None
 
 
+def _map_jsonplaceholder_demo(fields: dict[str, str]) -> CanonicalStatus | None:
+    """JSONPlaceholder Demo has no native "sales order" concept at all — the adapter
+    (`infrastructure/jsonplaceholder_demo_adapter.py`) stands one in with a `/todos`
+    record, whose one status-like field is the public, documented boolean `completed`.
+    `completed=true`/`completed=false` are the only two signals that API genuinely gives
+    us (verified from https://jsonplaceholder.typicode.com/guide/), so that's all this
+    maps.
+
+    TODO (account-specific, cannot be known from JSONPlaceholder's public docs): there is
+    no field mapped to `CanonicalStatus.CANCELLED` here. JSONPlaceholder's public API has
+    no concept of cancellation at all — if the real account this demo eventually points
+    at represents a cancelled order some other way (a custom field, a title convention,
+    a separate resource), that can only be learned from that account's own setup/API
+    docs. Do not invent a field/value for it here.
+    """
+    completed = fields.get("completed", "")
+    if completed == "true":
+        return CanonicalStatus.CLOSED
+    if completed == "false":
+        return CanonicalStatus.CONFIRMED
+    return None
+
+
 # The one place a new ERP's status mapping is registered. Keyed by the same string an
 # `ErpConnection.erp_type`/`ErpTarget.erp_type` carries (upper-cased).
 STATUS_MAPPERS: dict[str, StatusMapper] = {
     "ODOO": _map_odoo,
+    "JSONPLACEHOLDER_DEMO": _map_jsonplaceholder_demo,
 }
 
 
