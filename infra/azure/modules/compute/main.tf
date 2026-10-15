@@ -49,6 +49,17 @@ resource "azurerm_container_app" "api" {
         }
       }
 
+      # DefaultAzureCredential (secrets/azure.py's KeyVaultSecretStore) can't tell which
+      # of this container's identities to use without this — Container Apps' managed
+      # identity endpoint needs the client ID to disambiguate for a user-assigned
+      # identity, unlike system-assigned. Confirmed the hard way: without it,
+      # DefaultAzureCredential fails with "invalid_scope" trying every other credential
+      # type first.
+      env {
+        name  = "AZURE_MANAGED_IDENTITY_CLIENT_ID"
+        value = var.api_identity_client_id
+      }
+
       liveness_probe {
         transport = "HTTP"
         path      = "/livez"
@@ -91,6 +102,11 @@ resource "azurerm_container_app" "worker" {
     value = var.registry_admin_password
   }
 
+  secret {
+    name  = "servicebus-connection-string"
+    value = var.servicebus_connection_string
+  }
+
   registry {
     server               = var.registry_login_server
     username             = var.registry_admin_username
@@ -113,6 +129,21 @@ resource "azurerm_container_app" "worker" {
           name  = env.value.name
           value = env.value.value
         }
+      }
+
+      # Not in var.app_env (api doesn't get this — it never touches Service Bus
+      # directly, same scope AWS had). SAS connection string, not managed identity —
+      # see modules/messaging's "worker" authorization rule.
+      env {
+        name        = "AZURE_SERVICEBUS_CONNECTION_STRING"
+        secret_name = "servicebus-connection-string"
+      }
+
+      # Same reasoning as api's — worker's own identity, for Key Vault access via
+      # DefaultAzureCredential.
+      env {
+        name  = "AZURE_MANAGED_IDENTITY_CLIENT_ID"
+        value = var.worker_identity_client_id
       }
     }
   }

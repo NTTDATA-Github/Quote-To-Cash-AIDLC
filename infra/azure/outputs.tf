@@ -50,6 +50,11 @@ output "container_app_environment_id" {
   value = module.compute.environment_id
 }
 
+output "keycloak_realm_url" {
+  description = "Keycloak realm issuer URL — this is what EntraIdentityProvider-equivalent config points ENTRA_TENANT_ID/issuer-style settings at (see src/shared/identity/keycloak.py, not yet written)."
+  value       = module.keycloak.realm_url
+}
+
 output "mock_netsuite_url" {
   description = "Base URL for ErpConnection pointed at the mock NetSuite (dev/test aid, not production)."
   value       = "https://${module.mocks.netsuite_fqdn}"

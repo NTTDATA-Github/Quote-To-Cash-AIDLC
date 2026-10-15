@@ -1,0 +1,72 @@
+{
+  "realm": "o2c",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "OPERATOR", "description": "Operator / admin users" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "o2c-portal",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "tenant_id",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "operator1",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "operator1@example.com",
+      "firstName": "Operator",
+      "lastName": "One",
+      "credentials": [
+        { "type": "password", "value": "operator1", "temporary": false }
+      ],
+      "requiredActions": [],
+      "realmRoles": ["OPERATOR"],
+      "attributes": {
+        "tenant_id": ["tnt_demo"]
+      }
+    }
+  ]
+}

@@ -7,13 +7,14 @@
 # subscriptions and publishes the outbox relay). odoo gets read-only Key Vault access
 # (its db-password secret only).
 #
-# ACR access and Key Vault access are NOT granted here as role assignments anymore —
-# ACR uses admin credentials (modules/registry) and Key Vault uses access policies
-# (modules/secrets), both because granting a role assignment needs
-# `Microsoft.Authorization/roleAssignments/write`, which this sandbox's signed-in
-# principal lacks. Only Service Bus still needs that permission (unblocked separately).
-# These identities' `principal_id`s are still what Key Vault's access policies key off
-# of — see outputs.tf.
+# ACR, Key Vault, AND Service Bus access are NOT granted here as role assignments —
+# ACR uses admin credentials (modules/registry), Key Vault uses access policies
+# (modules/secrets), and Service Bus uses a SAS connection string
+# (modules/messaging's "worker" authorization rule). All three because granting a role
+# assignment needs `Microsoft.Authorization/roleAssignments/write`, which this sandbox's
+# signed-in principal lacks. Nothing here needs that permission anymore except the
+# optional GitHub deploy identity below. These identities' `principal_id`s are still
+# what Key Vault's access policies key off of — see outputs.tf.
 
 resource "azurerm_user_assigned_identity" "api" {
   name                = "${var.prefix}-api"
@@ -31,18 +32,6 @@ resource "azurerm_user_assigned_identity" "odoo" {
   name                = "${var.prefix}-odoo"
   resource_group_name = var.resource_group_name
   location            = var.location
-}
-
-resource "azurerm_role_assignment" "servicebus_sender" {
-  scope                = var.servicebus_namespace_id
-  role_definition_name = "Azure Service Bus Data Sender"
-  principal_id         = azurerm_user_assigned_identity.worker.principal_id
-}
-
-resource "azurerm_role_assignment" "servicebus_receiver" {
-  scope                = var.servicebus_namespace_id
-  role_definition_name = "Azure Service Bus Data Receiver"
-  principal_id         = azurerm_user_assigned_identity.worker.principal_id
 }
 
 # --- GitHub Actions OIDC deploy identity (optional) --------------------------

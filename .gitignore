@@ -23,6 +23,7 @@ portal_local.db
 *.env
 .cognito_demo.json
 *_token.txt
+*.tfvars
 
 # IDE / tooling
 .kiro/settings/
@@ -44,6 +45,9 @@ infra/terraform/bootstrap/terraform.rc
 # Bootstrap's state is local (chicken/egg: it creates the remote-state bucket itself).
 infra/terraform/bootstrap/terraform.tfstate*
 infra/azure/bootstrap/terraform.tfstate*
+# Local crash-recovery dump Terraform writes after a failed state push — may contain
+# real secrets in plaintext, never commit it.
+errored.tfstate
 
 # Temp
 *.log

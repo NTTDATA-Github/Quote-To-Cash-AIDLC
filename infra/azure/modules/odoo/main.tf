@@ -14,6 +14,13 @@ resource "azurerm_postgresql_flexible_server" "odoo" {
   administrator_password = var.odoo_db_password
 
   lifecycle {
+    # administrator_password IS ignored here (the server resource never re-applies it),
+    # but unlike before Keycloak existed, the real value now matters on every apply:
+    # var.odoo_db_password also becomes modules/keycloak's live KC_DB_PASSWORD. Always
+    # pass the real current password to `terraform apply` — a placeholder here is
+    # harmless for this resource but breaks Keycloak's DB connection (confirmed the hard
+    # way; see docs/deploy-azure.md).
+    #
     # zone: Azure auto-assigns one since none is set here. Without ignoring it,
     # Terraform tries to "correct" the drift back to unset on every apply, which the API
     # rejects unless paired with a high_availability.standby_availability_zone swap —

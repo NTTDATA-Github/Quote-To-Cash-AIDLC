@@ -36,6 +36,10 @@ class Settings:
     azure_key_vault_uri: str | None
     azure_servicebus_namespace: str | None  # fully-qualified, e.g. "<ns>.servicebus.windows.net"
     azure_servicebus_topic: str
+    # SAS connection string — takes priority over managed identity when set (see
+    # messaging/azure.py). ADR-0023: avoids needing roleAssignments/write for the
+    # "Azure Service Bus Data Sender/Receiver" RBAC roles.
+    azure_servicebus_connection_string: str | None
     # The client id of THIS process's own user-assigned managed identity (api/worker each
     # have their own — infra/azure/modules/iam). None = fall back to DefaultAzureCredential
     # (local `az login`, or the only identity on the host).
@@ -105,6 +109,7 @@ def get_settings() -> Settings:
         azure_key_vault_uri=os.environ.get("AZURE_KEY_VAULT_URI"),
         azure_servicebus_namespace=os.environ.get("AZURE_SERVICEBUS_NAMESPACE"),
         azure_servicebus_topic=os.environ.get("AZURE_SERVICEBUS_TOPIC", "platform-domain-events"),
+        azure_servicebus_connection_string=os.environ.get("AZURE_SERVICEBUS_CONNECTION_STRING"),
         azure_managed_identity_client_id=os.environ.get("AZURE_MANAGED_IDENTITY_CLIENT_ID"),
         entra_tenant_id=os.environ.get("ENTRA_TENANT_ID"),
         entra_client_id=os.environ.get("ENTRA_CLIENT_ID"),

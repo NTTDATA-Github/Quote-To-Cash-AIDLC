@@ -1,0 +1,24 @@
+# Self-hosted Keycloak (ADR-0023 follow-up) — replaces the Entra External ID path:
+# we administer our own realm instead of needing a tenant admin to grant Entra
+# permissions. Bakes in a realm export so the "o2c" realm/client/roles/demo user are
+# reproducible on every boot, not clicked together once by hand (same spirit as
+# scripts/odoo-boot.sh).
+#
+# DB connection, admin bootstrap credentials, and hostname handling are all runtime env
+# vars (infra/azure/modules/keycloak), not baked in here.
+#
+# operator1/operator1 (keycloak-realm-export.json) is a known, deliberately weak demo
+# credential — same precedent as Odoo's admin/admin in this repo. Change it before
+# anyone else uses this environment.
+#
+# The demo user needs firstName/lastName set: Keycloak 26's User Profile feature
+# requires them by default for the "user" role and silently fails direct-grant login
+# with "Account is not fully set up" otherwise — not related to requiredActions at all,
+# confirmed by checking GET .../admin/realms/o2c/users/profile.
+FROM quay.io/keycloak/keycloak:26.0
+
+COPY keycloak-realm-export.json /opt/keycloak/data/import/realm-export.json
+
+ENTRYPOINT ["/opt/keycloak/bin/kc.sh", "start", \
+  "--http-enabled=true", "--hostname-strict=false", "--proxy-headers=xforwarded", \
+  "--import-realm"]

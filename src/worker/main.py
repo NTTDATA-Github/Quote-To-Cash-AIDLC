@@ -184,6 +184,7 @@ def main() -> None:  # pragma: no cover - process entrypoint
             publisher = ServiceBusPublisher(
                 settings.azure_servicebus_namespace,
                 settings.azure_servicebus_topic,
+                connection_string=settings.azure_servicebus_connection_string,
                 managed_identity_client_id=settings.azure_managed_identity_client_id,
             )
             relay = RelayRunner(OutboxRelay(session_factory, publisher))
@@ -199,6 +200,7 @@ def main() -> None:  # pragma: no cover - process entrypoint
                 settings.azure_servicebus_topic,
                 role,
                 _dedupe(role, session_factory, handler),
+                connection_string=settings.azure_servicebus_connection_string,
                 managed_identity_client_id=settings.azure_managed_identity_client_id,
             )
             threads.append(

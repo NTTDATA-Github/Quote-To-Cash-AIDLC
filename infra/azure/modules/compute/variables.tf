@@ -27,6 +27,11 @@ variable "registry_admin_password" {
   sensitive = true
 }
 
+variable "servicebus_connection_string" {
+  type      = string
+  sensitive = true
+}
+
 variable "api_identity_id" {
   type = string
 }

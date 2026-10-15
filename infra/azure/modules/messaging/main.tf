@@ -57,3 +57,17 @@ resource "azurerm_servicebus_subscription_rule" "filter" {
   filter_type     = "SqlFilter"
   sql_filter      = join(" OR ", [for t in each.value : "eventType = '${t}'"])
 }
+
+# SAS authorization rule, not RBAC role assignments: granting "Azure Service Bus Data
+# Sender/Receiver" needs Microsoft.Authorization/roleAssignments/write, which this
+# sandbox's signed-in principal lacks (see docs/deploy-azure.md). Generating a SAS
+# connection string is a plain Contributor action on the namespace, same category as
+# ACR's admin credentials and Key Vault's access policies. send+listen only — matches
+# the worker's exact AWS scope (ConsumeQueues + PublishDomainEvents), no manage claim.
+resource "azurerm_servicebus_namespace_authorization_rule" "worker" {
+  name         = "worker"
+  namespace_id = azurerm_servicebus_namespace.main.id
+  listen       = true
+  send         = true
+  manage       = false
+}

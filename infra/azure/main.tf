@@ -67,13 +67,12 @@ module "database" {
 }
 
 module "iam" {
-  source                  = "./modules/iam"
-  prefix                  = local.prefix
-  location                = var.location
-  resource_group_name     = azurerm_resource_group.main.name
-  resource_group_id       = azurerm_resource_group.main.id
-  servicebus_namespace_id = module.messaging.namespace_id
-  github_oidc_repo        = var.github_oidc_repo
+  source              = "./modules/iam"
+  prefix              = local.prefix
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  resource_group_id   = azurerm_resource_group.main.id
+  github_oidc_repo    = var.github_oidc_repo
 }
 
 module "secrets" {
@@ -91,27 +90,28 @@ module "secrets" {
 }
 
 module "compute" {
-  source                     = "./modules/compute"
-  prefix                     = local.prefix
-  resource_group_name        = azurerm_resource_group.main.name
-  location                   = azurerm_resource_group.main.location
-  log_analytics_workspace_id = module.observability.workspace_id
-  registry_login_server      = module.registry.login_server
-  registry_admin_username    = module.registry.admin_username
-  registry_admin_password    = module.registry.admin_password
-  api_identity_id            = module.iam.api_identity_id
-  api_identity_client_id     = module.iam.api_identity_client_id
-  worker_identity_id         = module.iam.worker_identity_id
-  worker_identity_client_id  = module.iam.worker_identity_client_id
-  api_image                  = var.api_image != "" ? var.api_image : "${module.registry.login_server}/o2c/api:bootstrap"
-  worker_image               = var.worker_image != "" ? var.worker_image : "${module.registry.login_server}/o2c/worker:bootstrap"
-  api_min_replicas           = var.api_min_replicas
-  api_max_replicas           = var.api_max_replicas
-  worker_min_replicas        = var.worker_min_replicas
-  worker_max_replicas        = var.worker_max_replicas
-  container_cpu              = var.container_cpu
-  container_memory           = var.container_memory
-  app_env                    = local.app_env
+  source                       = "./modules/compute"
+  prefix                       = local.prefix
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
+  log_analytics_workspace_id   = module.observability.workspace_id
+  registry_login_server        = module.registry.login_server
+  registry_admin_username      = module.registry.admin_username
+  registry_admin_password      = module.registry.admin_password
+  servicebus_connection_string = module.messaging.worker_connection_string
+  api_identity_id              = module.iam.api_identity_id
+  api_identity_client_id       = module.iam.api_identity_client_id
+  worker_identity_id           = module.iam.worker_identity_id
+  worker_identity_client_id    = module.iam.worker_identity_client_id
+  api_image                    = var.api_image != "" ? var.api_image : "${module.registry.login_server}/o2c/api:bootstrap"
+  worker_image                 = var.worker_image != "" ? var.worker_image : "${module.registry.login_server}/o2c/worker:bootstrap"
+  api_min_replicas             = var.api_min_replicas
+  api_max_replicas             = var.api_max_replicas
+  worker_min_replicas          = var.worker_min_replicas
+  worker_max_replicas          = var.worker_max_replicas
+  container_cpu                = var.container_cpu
+  container_memory             = var.container_memory
+  app_env                      = local.app_env
 }
 
 module "ui" {
@@ -143,6 +143,25 @@ module "odoo" {
   # Odoo's db-password secret write needs the Key Vault access policy that grants
   # Terraform itself write access (module.secrets' "terraform" policy) — not implied by
   # referencing vault_id/vault_uri alone, since neither output depends on that policy.
+  depends_on = [module.secrets]
+}
+
+module "keycloak" {
+  source                       = "./modules/keycloak"
+  prefix                       = local.prefix
+  resource_group_name          = azurerm_resource_group.main.name
+  container_app_environment_id = module.compute.environment_id
+  registry_login_server        = module.registry.login_server
+  registry_admin_username      = module.registry.admin_username
+  registry_admin_password      = module.registry.admin_password
+  keycloak_image               = var.keycloak_image != "" ? var.keycloak_image : "${module.registry.login_server}/o2c/keycloak:bootstrap"
+  db_server_id                 = module.odoo.db_server_id
+  db_fqdn                      = module.odoo.db_fqdn
+  db_admin_username            = module.odoo.db_admin_username
+  db_admin_password            = var.odoo_db_password
+  vault_id                     = module.secrets.vault_id
+  admin_password               = var.keycloak_admin_password
+
   depends_on = [module.secrets]
 }
 

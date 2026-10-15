@@ -14,10 +14,6 @@ variable "resource_group_id" {
   type = string
 }
 
-variable "servicebus_namespace_id" {
-  type = string
-}
-
 variable "github_oidc_repo" {
   type    = string
   default = ""

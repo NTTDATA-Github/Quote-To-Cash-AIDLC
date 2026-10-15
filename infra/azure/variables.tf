@@ -187,6 +187,19 @@ variable "create_entra_app" {
   default     = false
 }
 
+variable "keycloak_image" {
+  description = "Full ACR image ref for Keycloak (repo:tag). Empty uses a bootstrap placeholder until the first push."
+  type        = string
+  default     = ""
+}
+
+variable "keycloak_admin_password" {
+  description = "Keycloak realm admin password. Empty = generate one. Supply via TF_VAR_keycloak_admin_password."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "mock_netsuite_image" {
   description = "Full ACR image ref for the mock NetSuite dev/test aid (repo:tag). Empty uses a bootstrap placeholder until the first push."
   type        = string

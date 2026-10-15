@@ -9,3 +9,8 @@ output "namespace_fqdn" {
 output "topic_name" {
   value = azurerm_servicebus_topic.domain_events.name
 }
+
+output "worker_connection_string" {
+  value     = azurerm_servicebus_namespace_authorization_rule.worker.primary_connection_string
+  sensitive = true
+}

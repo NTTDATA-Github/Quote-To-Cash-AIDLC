@@ -5,6 +5,37 @@ environment off AWS onto Azure. The Azure stack lives in `infra/azure/`, paralle
 `infra/terraform/` — both exist until cutover (Phase 8 below), so don't delete the AWS
 config yet.
 
+> **Always pass the real `TF_VAR_odoo_db_password` on every apply, never a placeholder.**
+> It looks safe to pass a dummy value — `modules/odoo`'s Postgres server has
+> `ignore_changes = [administrator_password]`, so the server itself never re-applies it —
+> but `modules/keycloak` also reads this same variable to build its live
+> `KC_DB_PASSWORD`, which is NOT covered by any `ignore_changes`. A placeholder here
+> silently breaks Keycloak's DB connection (confirmed the hard way: a password reset that
+> didn't fully propagate took Keycloak from `Succeeded` to crash-looping with
+> `password authentication failed for user "odoo"`). Keep the real value somewhere
+> durable, not just in a session scratchpad.
+
+> **Same trap applies to `TF_VAR_db_password` (the portal DB), one level removed.**
+> `modules/database`'s Postgres server also ignores `administrator_password` after
+> creation, but `modules/database`'s own `database_url` output embeds `var.db_password`
+> directly, and that output flows straight into `DATABASE_URL` on api/worker. Passing a
+> placeholder here doesn't error at apply time — it just bakes a wrong password into every
+> container until someone notices `FATAL: password authentication failed for user
+> "portal"` in the worker logs. A real value is hardcoded in `infra/azure/terraform.tfvars`
+> (gitignored) specifically so this can't drift silently again.
+
+> **A fresh portal Postgres server has no schema until Alembic is run against it —
+> nothing provisions this automatically yet.** `alembic`/`migrations/` are already in the
+> api/worker image (Phase 4's plan always intended a Container Apps Job to run `alembic
+> upgrade head` as part of CD), but that job was never built, so the step was just
+> skipped. Symptom: worker logs show `psycopg2.errors.UndefinedTable: relation "outbox"
+> does not exist` even though the DB connection itself is fine. Until the Container Apps
+> Job exists, run it by hand once per fresh database:
+> `az containerapp exec -g rg-o2c-staging -n o2c-staging-worker --revision <current> `
+> then, inside the shell, `python -m alembic upgrade head` (verify with `alembic current`
+> vs `alembic heads` — `--command` one-liners with shell redirection are unreliable here
+> because `az containerapp exec` doesn't shell-quote consistently across `cmd.exe`).
+
 ## Decisions taken so far (defaults, not blockers)
 
 Picked so the migration isn't stalled on open questions; change any of these in

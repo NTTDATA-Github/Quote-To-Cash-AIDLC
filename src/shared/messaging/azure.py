@@ -37,6 +37,27 @@ def _credential(credential: Any | None, managed_identity_client_id: str | None) 
     )
 
 
+def _service_bus_client(
+    namespace_fqdn: str,
+    connection_string: str | None,
+    credential: Any | None,
+    managed_identity_client_id: str | None,
+) -> Any:
+    """SAS connection string takes priority over managed identity — granting the
+    `Azure Service Bus Data Sender/Receiver` RBAC roles needs
+    `Microsoft.Authorization/roleAssignments/write`, which isn't always available (see
+    `infra/azure/modules/messaging`'s "worker" authorization rule and ADR-0023).
+    Managed identity stays supported for environments that do have that permission."""
+    from azure.servicebus import ServiceBusClient
+
+    if connection_string:
+        return ServiceBusClient.from_connection_string(connection_string)
+    return ServiceBusClient(
+        fully_qualified_namespace=namespace_fqdn,
+        credential=_credential(credential, managed_identity_client_id),
+    )
+
+
 class ServiceBusPublisher:
     """EventPublisher over a Service Bus topic with sessions enabled."""
 
@@ -45,15 +66,13 @@ class ServiceBusPublisher:
         namespace_fqdn: str,
         topic_name: str,
         client: Any | None = None,
+        connection_string: str | None = None,
         credential: Any | None = None,
         managed_identity_client_id: str | None = None,
     ) -> None:
         if client is None:
-            from azure.servicebus import ServiceBusClient
-
-            client = ServiceBusClient(
-                fully_qualified_namespace=namespace_fqdn,
-                credential=_credential(credential, managed_identity_client_id),
+            client = _service_bus_client(
+                namespace_fqdn, connection_string, credential, managed_identity_client_id
             )
         self._client = client
         self._topic_name = topic_name
@@ -87,16 +106,14 @@ class ServiceBusConsumerRunner:
         subscription_name: str,
         handler: MessageHandler,
         client: Any | None = None,
+        connection_string: str | None = None,
         credential: Any | None = None,
         managed_identity_client_id: str | None = None,
         max_wait_seconds: float = 10,
     ) -> None:
         if client is None:
-            from azure.servicebus import ServiceBusClient
-
-            client = ServiceBusClient(
-                fully_qualified_namespace=namespace_fqdn,
-                credential=_credential(credential, managed_identity_client_id),
+            client = _service_bus_client(
+                namespace_fqdn, connection_string, credential, managed_identity_client_id
             )
         self._client = client
         self._topic_name = topic_name
