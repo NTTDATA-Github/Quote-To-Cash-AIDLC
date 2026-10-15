@@ -9,6 +9,14 @@ resource "azurerm_container_app_environment" "main" {
   log_analytics_workspace_id = var.log_analytics_workspace_id
 }
 
+locals {
+  # Same deterministic construction as modules/keycloak's own KC_HOSTNAME — computed
+  # here (not threaded through root locals) specifically to avoid a dependency cycle:
+  # module.keycloak needs module.compute.environment_id, so module.compute can't also
+  # depend on module.keycloak.realm_url.
+  keycloak_issuer = "https://${var.prefix}-keycloak.${azurerm_container_app_environment.main.default_domain}/realms/o2c"
+}
+
 resource "azurerm_container_app" "api" {
   name                         = "${var.prefix}-api"
   container_app_environment_id = azurerm_container_app_environment.main.id
@@ -58,6 +66,15 @@ resource "azurerm_container_app" "api" {
       env {
         name  = "AZURE_MANAGED_IDENTITY_CLIENT_ID"
         value = var.api_identity_client_id
+      }
+
+      env {
+        name  = "KEYCLOAK_ISSUER"
+        value = local.keycloak_issuer
+      }
+      env {
+        name  = "KEYCLOAK_CLIENT_ID"
+        value = "o2c-portal"
       }
 
       liveness_probe {
@@ -144,6 +161,15 @@ resource "azurerm_container_app" "worker" {
       env {
         name  = "AZURE_MANAGED_IDENTITY_CLIENT_ID"
         value = var.worker_identity_client_id
+      }
+
+      env {
+        name  = "KEYCLOAK_ISSUER"
+        value = local.keycloak_issuer
+      }
+      env {
+        name  = "KEYCLOAK_CLIENT_ID"
+        value = "o2c-portal"
       }
     }
   }

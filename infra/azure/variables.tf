@@ -218,3 +218,51 @@ variable "anthropic_api_key" {
   sensitive   = true
   default     = ""
 }
+
+# Azure Foundry (Claude models) configuration
+variable "foundry_model_name" {
+  description = "Claude model to deploy on Foundry (e.g., claude-haiku-5-5, claude-opus-5-5)"
+  type        = string
+  default     = "claude-haiku-5-5"
+}
+
+variable "foundry_model_version" {
+  description = "Claude model version (e.g., '2024-12-19' or 'latest')"
+  type        = string
+  default     = "latest"
+}
+
+variable "foundry_api_key" {
+  description = "Azure Foundry API key (optional; will be rotated post-apply). Supply via TF_VAR_foundry_api_key."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+# ERP agent service configuration (code generation via Claude Code CLI)
+variable "agent_target_repo_url" {
+  description = "Git repo URL the agent clones, modifies, and opens PRs against (e.g., https://github.com/org/repo). Supply via TF_VAR_agent_target_repo_url."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "agent_github_token" {
+  description = "GitHub PAT for the agent (Contents + Pull Requests scopes). Supply via TF_VAR_agent_github_token."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "agent_anthropic_api_key" {
+  description = "Anthropic API key for the agent's claude CLI (if using Anthropic, not Bedrock). Supply via TF_VAR_agent_anthropic_api_key."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "coding_agent_model" {
+  description = "Model the agent uses for code generation (e.g., claude-sonnet-5-5, claude-opus-5-5)"
+  type        = string
+  default     = "claude-sonnet-5-5"
+}

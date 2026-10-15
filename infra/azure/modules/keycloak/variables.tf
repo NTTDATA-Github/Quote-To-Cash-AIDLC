@@ -10,6 +10,11 @@ variable "container_app_environment_id" {
   type = string
 }
 
+variable "environment_default_domain" {
+  description = "Container Apps environment's default domain (e.g. <env-id>.<region>.azurecontainerapps.io) — used to pin KC_HOSTNAME to this app's stable ingress hostname, so the issuer Keycloak stamps into tokens never changes across redeploys."
+  type        = string
+}
+
 variable "registry_login_server" {
   type = string
 }

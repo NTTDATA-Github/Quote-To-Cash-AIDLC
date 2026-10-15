@@ -7,5 +7,7 @@ from __future__ import annotations
 
 from .anthropic import AnthropicLlmClient
 from .bedrock import BedrockLlmClient
+from .foundry import AzureFoundryLlmClient
+from .openai import OpenAiLlmClient
 
-__all__ = ["AnthropicLlmClient", "BedrockLlmClient"]
+__all__ = ["AnthropicLlmClient", "BedrockLlmClient", "AzureFoundryLlmClient", "OpenAiLlmClient"]

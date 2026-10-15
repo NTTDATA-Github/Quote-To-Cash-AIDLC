@@ -151,6 +151,7 @@ module "keycloak" {
   prefix                       = local.prefix
   resource_group_name          = azurerm_resource_group.main.name
   container_app_environment_id = module.compute.environment_id
+  environment_default_domain   = module.compute.environment_default_domain
   registry_login_server        = module.registry.login_server
   registry_admin_username      = module.registry.admin_username
   registry_admin_password      = module.registry.admin_password
@@ -175,4 +176,33 @@ module "mocks" {
   registry_admin_password      = module.registry.admin_password
   mock_netsuite_image          = var.mock_netsuite_image != "" ? var.mock_netsuite_image : "${module.registry.login_server}/o2c/mock-netsuite:bootstrap"
   mock_reseller_image          = var.mock_reseller_image != "" ? var.mock_reseller_image : "${module.registry.login_server}/o2c/mock-reseller:bootstrap"
+}
+
+module "foundry" {
+  source              = "./modules/foundry"
+  prefix              = local.prefix
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  vault_id            = module.secrets.vault_id
+  model_name          = var.foundry_model_name
+  model_version       = var.foundry_model_version
+  foundry_api_key     = var.foundry_api_key
+
+  depends_on = [module.secrets]
+}
+
+module "agent" {
+  source                       = "./modules/agent"
+  prefix                       = local.prefix
+  resource_group_name          = azurerm_resource_group.main.name
+  container_app_environment_id = module.compute.environment_id
+  registry_login_server        = module.registry.login_server
+  registry_admin_username      = module.registry.admin_username
+  registry_admin_password      = module.registry.admin_password
+  target_repo_url              = var.agent_target_repo_url
+  github_token                 = var.agent_github_token
+  anthropic_api_key            = var.agent_anthropic_api_key
+  coding_agent_model           = var.coding_agent_model
+
+  depends_on = [module.foundry]
 }

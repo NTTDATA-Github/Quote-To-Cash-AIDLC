@@ -108,6 +108,42 @@ resource "azurerm_cdn_frontdoor_route" "ui" {
   link_to_default_domain = true
 }
 
+# --- Build upload (Terraform-managed, not `az storage blob sync`) ------------
+# `az storage blob sync`/`az storage blob upload-batch` are Python-CLI calls — the same
+# SSL stack this corporate network's TLS-intercepting proxy breaks for *.blob.core
+# .windows.net (see docs/deploy-azure.md). `azurerm_storage_blob` goes through the Go-based
+# Terraform provider instead, which this network doesn't break (same reasoning as using
+# `docker push` instead of `az acr build`).
+locals {
+  ui_dist_dir = "${path.module}/../../../../ui/dist"
+  ui_files    = fileset(local.ui_dist_dir, "**")
+  content_types = {
+    html = "text/html"
+    js   = "application/javascript"
+    css  = "text/css"
+    json = "application/json"
+    svg  = "image/svg+xml"
+    png  = "image/png"
+    ico  = "image/x-icon"
+    woff = "font/woff"
+    woff2 = "font/woff2"
+    txt  = "text/plain"
+  }
+}
+
+resource "azurerm_storage_blob" "ui_assets" {
+  for_each               = local.ui_files
+  name                   = each.value
+  storage_account_name   = azurerm_storage_account.ui.name
+  storage_container_name = "$web"
+  type                   = "Block"
+  source                 = "${local.ui_dist_dir}/${each.value}"
+  content_md5            = filemd5("${local.ui_dist_dir}/${each.value}")
+  content_type           = lookup(local.content_types, lower(reverse(split(".", each.value))[0]), "application/octet-stream")
+
+  depends_on = [azurerm_storage_account_static_website.ui]
+}
+
 # GraphQL is a POST API, not cacheable: forward everything straight through, uncached.
 resource "azurerm_cdn_frontdoor_route" "graphql" {
   name                          = "graphql"

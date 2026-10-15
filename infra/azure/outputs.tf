@@ -64,3 +64,13 @@ output "mock_reseller_url" {
   description = "Register this as a webhook endpoint URL to watch deliveries (dev/test aid, not production)."
   value       = "https://${module.mocks.reseller_fqdn}/hooks"
 }
+
+output "foundry_endpoint" {
+  description = "Azure Foundry endpoint for Claude API calls (set FOUNDRY_ENDPOINT in API/worker env)"
+  value       = module.foundry.foundry_endpoint
+}
+
+output "agent_service_url" {
+  description = "Agent service URL for HttpAdapterRunLauncher (set AGENT_SERVICE_URL in API/worker env)"
+  value       = module.agent.agent_service_url
+}

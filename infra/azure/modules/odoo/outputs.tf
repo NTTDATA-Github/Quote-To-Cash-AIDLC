@@ -1,5 +1,5 @@
 output "fqdn" {
-  value = azurerm_container_app.odoo.latest_revision_fqdn
+  value = azurerm_container_app.odoo.ingress[0].fqdn
 }
 
 output "db_fqdn" {

@@ -96,6 +96,15 @@ resource "azurerm_container_app" "keycloak" {
         secret_name = "db-password"
       }
       env {
+        # Pinned to the app-level stable ingress hostname (never the per-revision
+        # suffixed one — see modules/compute's "api_fqdn" comment) — otherwise Keycloak
+        # auto-detects its issuer from whatever Host header a request arrives on, which
+        # changes on every redeploy and silently breaks every already-configured relying
+        # party's issuer check (KeycloakIdentityProvider included).
+        name  = "KC_HOSTNAME"
+        value = "${var.prefix}-keycloak.${var.environment_default_domain}"
+      }
+      env {
         name  = "KC_BOOTSTRAP_ADMIN_USERNAME"
         value = "admin"
       }

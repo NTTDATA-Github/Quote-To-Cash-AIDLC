@@ -119,9 +119,15 @@ from src.shared.identity import (
     EntraIdentityProvider,
     HeaderStubIdentityProvider,
     IdentityProvider,
+    KeycloakIdentityProvider,
 )
 from src.shared.identity.cognito import issuer_url
-from src.shared.llm import AnthropicLlmClient, BedrockLlmClient
+from src.shared.llm import (
+    AnthropicLlmClient,
+    AzureFoundryLlmClient,
+    BedrockLlmClient,
+    OpenAiLlmClient,
+)
 from src.shared.messaging import InMemoryMessageBus
 from src.shared.messaging.facts import BusFactPublisher, FactPublisher, OutboxFactPublisher
 from src.shared.persistence.engine import get_session_factory
@@ -520,16 +526,25 @@ def _resolve_identity_provider(settings: Settings) -> IdentityProvider:
     without hard-failing container construction). ADR-0023: `cloud_provider` picks Cognito
     vs. Entra; within either, setting the relevant env vars turns on real verification."""
     if settings.cloud_provider == "azure":
-        if not settings.entra_tenant_id or not settings.entra_client_id:
-            log.warning(
-                "ENTRA_TENANT_ID/ENTRA_CLIENT_ID not set — using the header stub, not real auth"
+        # Keycloak takes priority: it's the IdentityProvider actually standing today (no
+        # real Entra External ID tenant exists — Entra app creation is blocked in this
+        # sandbox, see ADR-0023). Entra stays available for whenever that changes.
+        if settings.keycloak_issuer:
+            return KeycloakIdentityProvider(
+                issuer=settings.keycloak_issuer,
+                client_id=settings.keycloak_client_id,
             )
-            return HeaderStubIdentityProvider()
-        return EntraIdentityProvider(
-            tenant_id=settings.entra_tenant_id,
-            client_id=settings.entra_client_id,
-            tenant_claim_name=settings.entra_tenant_claim_name,
+        if settings.entra_tenant_id and settings.entra_client_id:
+            return EntraIdentityProvider(
+                tenant_id=settings.entra_tenant_id,
+                client_id=settings.entra_client_id,
+                tenant_claim_name=settings.entra_tenant_claim_name,
+            )
+        log.warning(
+            "KEYCLOAK_ISSUER/ENTRA_TENANT_ID+ENTRA_CLIENT_ID not set — "
+            "using the header stub, not real auth"
         )
+        return HeaderStubIdentityProvider()
 
     if not settings.cognito_user_pool_id or not settings.cognito_client_id:
         log.warning(
@@ -564,14 +579,58 @@ def _resolve_secret_store(settings: Settings) -> SecretStore:
 
 def _llm_client(settings: Settings, secrets: SecretStore) -> LlmClient:
     """ADR-0023: which cloud's LLM client backs `MappingProposer`/sample-request
-    suggestions. The Anthropic API key is never a plaintext env var — same "secrets never
+    suggestions. The API key is never a plaintext env var — same "secrets never
     in plaintext" rule as every other credential (SECURITY-12, `secrets/store.py`) —
-    it's read from Key Vault through the same `SecretStore` port everything else uses."""
-    if settings.cloud_provider == "azure":
+    it's read from Key Vault through the same `SecretStore` port everything else uses.
+
+    Cloud-agnostic provider selection: `mapping_llm_provider` (if set) overrides the
+    general `llm_provider`. When not set, defaults to foundry (if available), else
+    anthropic (azure), else bedrock (aws).
+    """
+    provider = settings.mapping_llm_provider
+    if not provider:
+        provider = settings.llm_provider
+    if not provider:
+        provider = (
+            "foundry"
+            if settings.foundry_endpoint
+            else ("anthropic" if settings.cloud_provider == "azure" else "bedrock")
+        )
+
+    if provider == "openai":
+        if not settings.foundry_endpoint:
+            raise RuntimeError(
+                "FOUNDRY_ENDPOINT required for mapping_llm_provider=openai "
+                "(e.g., https://<region>.api.foundry.azure.com/...)"
+            )
+        api_key = settings.foundry_api_key or secrets.get_secret("foundry-api-key")
+        return OpenAiLlmClient(
+            settings.foundry_endpoint,
+            api_key=api_key,
+            model_id=settings.mapping_openai_model,
+        )
+    elif provider == "foundry":
+        if not settings.foundry_endpoint:
+            raise RuntimeError(
+                "FOUNDRY_ENDPOINT required for llm_provider=foundry "
+                "(e.g., https://<region>.api.foundry.azure.com/...)"
+            )
+        api_key = settings.foundry_api_key or secrets.get_secret("foundry-api-key")
+        return AzureFoundryLlmClient(
+            settings.foundry_endpoint,
+            api_key=api_key,
+            model_id=settings.mapping_anthropic_model,
+        )
+    elif provider == "anthropic":
         return AnthropicLlmClient(
             settings.mapping_anthropic_model, api_key=secrets.get_secret("anthropic-api-key")
         )
-    return BedrockLlmClient(settings.mapping_bedrock_model_id, settings.aws_region)
+    elif provider == "bedrock":
+        return BedrockLlmClient(settings.mapping_bedrock_model_id, settings.aws_region)
+    else:
+        raise ValueError(
+            f"unknown LLM_PROVIDER '{provider}' — valid: bedrock, anthropic, foundry, openai"
+        )
 
 
 def _build_postgres_container(settings: Settings) -> Container:

@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { type AuthTokens, type CognitoConfig, decodeIdTokenClaims, refreshSession, signIn as cognitoSignIn } from "./cognitoAuth";
+import * as cognito from "./cognitoAuth";
+import * as keycloak from "./keycloakAuth";
+
+import type { AuthTokens } from "./cognitoAuth";
 
 const STORAGE_KEY = "erp-portal.auth";
 // Refresh a bit before actual expiry so a request never races a just-expired token.
@@ -39,13 +42,35 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-function cognitoConfig(): CognitoConfig {
-  return {
+// VITE_AUTH_PROVIDER picks the identity backend, same shape as the API's own
+// CLOUD_PROVIDER switch — default "cognito" so existing AWS builds need no new env var.
+const provider = import.meta.env.VITE_AUTH_PROVIDER || "cognito";
+
+function authAdapter() {
+  if (provider === "keycloak") {
+    const config: keycloak.KeycloakConfig = {
+      issuerUrl: import.meta.env.VITE_KEYCLOAK_ISSUER_URL,
+      clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID,
+    };
+    return {
+      signIn: (username: string, password: string) => keycloak.signIn(config, username, password),
+      refreshSession: (refreshToken: string) => keycloak.refreshSession(config, refreshToken),
+      decodeIdTokenClaims: keycloak.decodeIdTokenClaims,
+    };
+  }
+  const config: cognito.CognitoConfig = {
     endpointUrl: import.meta.env.VITE_COGNITO_ENDPOINT_URL || undefined,
     region: import.meta.env.VITE_COGNITO_REGION,
     clientId: import.meta.env.VITE_COGNITO_CLIENT_ID,
   };
+  return {
+    signIn: (username: string, password: string) => cognito.signIn(config, username, password),
+    refreshSession: (refreshToken: string) => cognito.refreshSession(config, refreshToken),
+    decodeIdTokenClaims: cognito.decodeIdTokenClaims,
+  };
 }
+
+const auth = authAdapter();
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState<AuthTokens | null>(() => loadStoredTokens());
@@ -68,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(true);
       setError(null);
       try {
-        const next = await cognitoSignIn(cognitoConfig(), username, password);
+        const next = await auth.signIn(username, password);
         applyTokens(next);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Sign-in failed");
@@ -88,7 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const delay = Math.max(0, tokens.expiresAt - Date.now() - REFRESH_MARGIN_MS);
     refreshTimer.current = setTimeout(() => {
-      refreshSession(cognitoConfig(), tokens.refreshToken)
+      auth
+        .refreshSession(tokens.refreshToken)
         .then(applyTokens)
         .catch(() => signOut());
     }, delay);
@@ -99,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [tokens, applyTokens, signOut]);
 
   const claims = useMemo(
-    () => (tokens ? decodeIdTokenClaims(tokens.idToken) : { tenantId: null, roles: [], email: null, username: null }),
+    () => (tokens ? auth.decodeIdTokenClaims(tokens.idToken) : { tenantId: null, roles: [], email: null, username: null }),
     [tokens],
   );
 
