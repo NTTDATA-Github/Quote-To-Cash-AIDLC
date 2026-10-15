@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import {
   AlertTriangle,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import { ProductTour, TOUR_DISMISSED_KEY } from "./components/ProductTour";
 import { UserMenu } from "./components/UserMenu";
 import type { HeaderSlot } from "./components/PageHeader";
 
@@ -42,6 +43,16 @@ const ADMIN_NAV: { label: string; items: { to: string; label: string; icon: Luci
 
 export function AppShell() {
   const [headerSlot, setHeaderSlot] = useState<HeaderSlot>(null);
+  // Shown once per browser, right after login (ask-once, see TOUR_DISMISSED_KEY) — the
+  // operator can bring it back later from the user menu.
+  const [tourOpen, setTourOpen] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(TOUR_DISMISSED_KEY) !== "1") setTourOpen(true);
+    } catch {
+      setTourOpen(true);
+    }
+  }, []);
 
   return (
     <div className="app">
@@ -77,13 +88,14 @@ export function AppShell() {
         <header className="top">
           <div className="top-title" ref={setHeaderSlot} />
           <div className="top-tools">
-            <UserMenu />
+            <UserMenu onStartTour={() => setTourOpen(true)} />
           </div>
         </header>
         <main className="content">
           <Outlet context={headerSlot} />
         </main>
       </div>
+      <ProductTour open={tourOpen} onClose={() => setTourOpen(false)} />
     </div>
   );
 }

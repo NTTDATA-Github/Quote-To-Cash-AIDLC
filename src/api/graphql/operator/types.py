@@ -90,6 +90,14 @@ class ConnectionType:
     status: str
     secret_ref: str
     has_webhook_secret: bool
+    # Derived from the adapter registry at read time (ADR-0021), never stored — whether
+    # this erp_type has working delivery code, not just a connection row.
+    has_adapter: bool
+    # ADR-0022: what `hasAdapter` alone can't say — whether this erp_type's mapping is
+    # NEEDS_MAPPING (genuinely actionable on the Mapping page), MAPPING_IN_PROGRESS,
+    # AWAITING_ADAPTER (already approved, waiting for the generated code to land), or
+    # ADAPTER_READY (same fact as `hasAdapter`, spelled out for display).
+    mapping_status: str
 
 
 @strawberry.type
@@ -99,6 +107,12 @@ class BindingType:
     connection_id: str
     erp_customer_id: str
     status: str
+
+
+@strawberry.type
+class ResellerType:
+    tenant_id: str
+    name: str
 
 
 @strawberry.type
@@ -206,3 +220,47 @@ class SampleFileInput:
 
     filename: str
     content: str
+
+
+# --- ERP onboarding probe (fetch samples live instead of a manual file upload) ---
+@strawberry.input
+class AuthConfigInput:
+    """How to authenticate the probe's calls to the new ERP. `auth_type` is one of
+    `AuthType`'s values (NONE | API_KEY_HEADER | BASIC | BEARER_TOKEN) — declarative auth
+    only; anything needing a handshake or a redirect UI isn't supported here yet, use the
+    manual sample-file upload (`submitMapping`) instead. `secret` is write-only: it goes
+    straight into Secrets Manager and is never echoed back."""
+
+    auth_type: str
+    params: strawberry.scalars.JSON
+    secret: str | None = None
+
+
+@strawberry.input
+class SampleRequestInput:
+    """One HTTP call the probe makes to pull a sample of one kind of record (e.g.
+    "orders"). `path` is appended to `baseUrl`."""
+
+    label: str
+    method: str = "GET"
+    path: str = ""
+    query_params: strawberry.scalars.JSON = strawberry.field(default_factory=dict)
+
+
+@strawberry.type
+class ProbeSampleType:
+    """One `SampleRequestInput`'s outcome. Exactly one of `text`/`error` is set."""
+
+    label: str
+    text: str | None
+    error: str | None
+
+
+@strawberry.type
+class SuggestedRequestType:
+    """One LLM-suggested `SampleRequestInput` — a starting point the operator reviews
+    and can edit before firing anything (`probeErpSamples`/`submitMappingFromProbe`)."""
+
+    label: str
+    method: str
+    path: str

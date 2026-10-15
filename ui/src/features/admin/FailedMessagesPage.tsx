@@ -6,7 +6,7 @@ import { DataTable, type Column } from "../../components/DataTable";
 import { FilterMenu } from "../../components/FilterMenu";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
-import { useOperatorOrders } from "../../hooks/useAdmin";
+import { useConnections, useOperatorOrders, useResellers } from "../../hooks/useAdmin";
 import type { OperatorOrder } from "../../api/queries/admin";
 import { statusLabel } from "../../lib/statusLabel";
 import { statusRank } from "../../lib/orderStage";
@@ -25,8 +25,16 @@ const STATUS_OPTIONS: { value: AttentionStatus; label: string }[] = [
  * OrdersPage, filtered, rather than a separate backend concept. */
 export function FailedMessagesPage() {
   const { data: orders, isLoading, error } = useOperatorOrders();
+  const { data: resellers } = useResellers();
+  const { data: connections } = useConnections();
   const [status, setStatus] = useState<AttentionStatus>("all");
   const [search, setSearch] = useState("");
+
+  const resellerNameById = new Map((resellers ?? []).map((r) => [r.tenantId, r.name]));
+  const connectionLabelById = new Map((connections ?? []).map((c) => [c.connectionId, c.instanceLabel]));
+  const resellerName = (o: OperatorOrder) => resellerNameById.get(o.tenantId) ?? o.tenantId;
+  const connectionLabel = (o: OperatorOrder) =>
+    o.owningConnectionId ? connectionLabelById.get(o.owningConnectionId) ?? o.owningConnectionId : "—";
 
   const attention = (orders ?? []).filter((o) => ATTENTION_STATUSES.has(o.status));
   const counts = {
@@ -37,12 +45,14 @@ export function FailedMessagesPage() {
 
   const rows = attention
     .filter((o) => status === "all" || o.status === status)
-    .filter((o) => [o.orderId, o.tenantId, o.owningConnectionId ?? ""].join(" ").toLowerCase().includes(search.toLowerCase()));
+    .filter((o) =>
+      [o.orderId, o.tenantId, resellerName(o), o.owningConnectionId ?? ""].join(" ").toLowerCase().includes(search.toLowerCase()),
+    );
 
   const columns: Column<OperatorOrder>[] = [
     { key: "orderId", header: "Order", render: (o) => <Link to={`/admin/orders/${o.orderId}`}>{o.orderId}</Link>, sortValue: (o) => o.orderId },
-    { key: "tenant", header: "Reseller", render: (o) => <span className="id">{o.tenantId}</span>, sortValue: (o) => o.tenantId },
-    { key: "connection", header: "Connection", render: (o) => o.owningConnectionId ?? "—", sortValue: (o) => o.owningConnectionId },
+    { key: "tenant", header: "Reseller", render: (o) => resellerName(o), sortValue: (o) => resellerName(o) },
+    { key: "connection", header: "Connection", render: (o) => connectionLabel(o), sortValue: (o) => connectionLabel(o) },
     { key: "status", header: "Status", render: (o) => <StatusBadge status={statusLabel(o.status)} />, sortValue: (o) => statusRank(o.status) },
   ];
 

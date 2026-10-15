@@ -1,0 +1,7 @@
+# Partial backend config for the `staging` environment. Fill in the values output by
+# infra/azure/bootstrap, then:
+#   terraform -chdir=infra/azure init -backend-config=envs/staging.backend.tfbackend
+resource_group_name  = "rg-o2c-tfstate"
+storage_account_name = "o2cstgtfstate862b"
+container_name       = "tfstate"
+key                   = "staging/terraform.tfstate"

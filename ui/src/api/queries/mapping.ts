@@ -28,6 +28,12 @@ export interface MappingJob {
   sampleFiles: string[];
 }
 
+export interface MappableConnection {
+  connectionId: string;
+  erpType: string;
+  instanceLabel: string;
+}
+
 export interface AdapterRun {
   status: string; // PENDING | PROCESSING | DONE | FAILED
   branch: string | null;
@@ -35,9 +41,45 @@ export interface AdapterRun {
   error: string | null;
 }
 
+// --- ERP onboarding probe (fetch samples live instead of a manual file upload) ---
+export type AuthType = "NONE" | "API_KEY_HEADER" | "BASIC" | "BEARER_TOKEN";
+
+export interface AuthConfigInput {
+  authType: AuthType;
+  params: Record<string, string>;
+  secret: string | null;
+}
+
+export interface SampleRequestInput {
+  label: string;
+  method: string;
+  path: string;
+  queryParams: Record<string, string>;
+}
+
+export interface ProbeSample {
+  label: string;
+  text: string | null;
+  error: string | null;
+}
+
+export interface SuggestedRequest {
+  label: string;
+  method: string;
+  path: string;
+}
+
 export const CANONICAL_SCHEMAS_QUERY = /* GraphQL */ `
   query CanonicalSchemas {
     canonicalSchemas { name fieldCount }
+  }
+`;
+
+// Derived live from the real adapter contract (ErpPartnerOrder et al.) — a new field
+// shows up here on the next fetch, no CSV to maintain.
+export const CANONICAL_ORDER_SCHEMA_QUERY = /* GraphQL */ `
+  query CanonicalOrderSchema {
+    canonicalOrderSchema
   }
 `;
 
@@ -79,6 +121,14 @@ export const ADAPTER_RUN_QUERY = /* GraphQL */ `
   }
 `;
 
+// ADR-0021/0022: connections whose erp_type has no adapter yet and no mapping job
+// already in flight or approved for it — the only ones the Mapping page may pick.
+export const MAPPABLE_CONNECTIONS_QUERY = /* GraphQL */ `
+  query MappableConnections {
+    mappableConnections { connectionId erpType instanceLabel }
+  }
+`;
+
 export const REGISTER_CANONICAL_SCHEMA_MUTATION = /* GraphQL */ `
   mutation RegisterCanonicalSchema($name: String!, $csvText: String!) {
     registerCanonicalSchema(name: $name, csvText: $csvText) { name fieldCount }
@@ -87,13 +137,13 @@ export const REGISTER_CANONICAL_SCHEMA_MUTATION = /* GraphQL */ `
 
 export const SUBMIT_MAPPING_MUTATION = /* GraphQL */ `
   mutation SubmitMapping(
-    $erpName: String!
+    $connectionId: String!
     $sampleFiles: [SampleFileInput!]!
     $schemaName: String
     $canonicalFieldsCsv: String
   ) {
     submitMapping(
-      erpName: $erpName
+      connectionId: $connectionId
       sampleFiles: $sampleFiles
       schemaName: $schemaName
       canonicalFieldsCsv: $canonicalFieldsCsv
@@ -107,5 +157,48 @@ export const SUBMIT_MAPPING_MUTATION = /* GraphQL */ `
 export const APPROVE_MAPPING_MUTATION = /* GraphQL */ `
   mutation ApproveMapping($jobId: String!) {
     approveMapping(jobId: $jobId) { jobId adapterRunId }
+  }
+`;
+
+export const PROBE_ERP_SAMPLES_MUTATION = /* GraphQL */ `
+  mutation ProbeErpSamples($connectionId: String!, $requests: [SampleRequestInput!]!) {
+    probeErpSamples(connectionId: $connectionId, requests: $requests) { label text error }
+  }
+`;
+
+export const SUGGEST_SAMPLE_REQUESTS_MUTATION = /* GraphQL */ `
+  mutation SuggestSampleRequests(
+    $connectionId: String!
+    $schemaName: String
+    $canonicalFieldsCsv: String
+  ) {
+    suggestSampleRequests(
+      connectionId: $connectionId
+      schemaName: $schemaName
+      canonicalFieldsCsv: $canonicalFieldsCsv
+    ) {
+      label
+      method
+      path
+    }
+  }
+`;
+
+export const SUBMIT_MAPPING_FROM_PROBE_MUTATION = /* GraphQL */ `
+  mutation SubmitMappingFromProbe(
+    $connectionId: String!
+    $requests: [SampleRequestInput!]!
+    $schemaName: String
+    $canonicalFieldsCsv: String
+  ) {
+    submitMappingFromProbe(
+      connectionId: $connectionId
+      requests: $requests
+      schemaName: $schemaName
+      canonicalFieldsCsv: $canonicalFieldsCsv
+    ) {
+      jobId
+      status
+    }
   }
 `;

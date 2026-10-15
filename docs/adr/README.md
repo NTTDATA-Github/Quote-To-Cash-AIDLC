@@ -9,7 +9,7 @@ under a minute.
 |---|---|---|
 | [0001](0001-modular-monolith.md) | Modular monolith (`api` + `worker`), not microservices | Accepted |
 | [0002](0002-event-source-order-only.md) | Event-source transactional aggregates (`Order`, `Shipment`, `Invoice`); reference/config stays CRUD | Accepted (amended by 0014) |
-| [0003](0003-erp-adapter-registry.md) | ERPs plug in via an adapter + registry pattern, not per-ERP conditionals | Accepted |
+| [0003](0003-erp-adapter-registry.md) | ERPs plug in via an adapter + registry pattern, not per-ERP conditionals | Accepted (amended by 0021) |
 | [0004](0004-single-shared-postgres.md) | One shared Postgres for event store + outbox + projections + CRUD | Accepted |
 | [0005](0005-tenant-erp-identity-binding.md) | Tenant↔ERP identity resolved by a binding table, not an identity-resolution service | Accepted |
 | [0006](0006-stateless-adapter-multi-instance.md) | Multiple instances of one ERP handled as data, not as separate adapter code | Accepted |
@@ -27,6 +27,9 @@ under a minute.
 | [0018](0018-shipment-invoice-order-saga.md) | Shipment/invoice → order is an event-driven saga, not a cross-aggregate transaction | Accepted (supersedes FR-A4's atomic guarantee) |
 | [0019](0019-order-routing.md) | An existing ERP order is routed by the connection being read and the verified binding on it | Accepted |
 | [0020](0020-terraform-aws-deploy-and-cicd.md) | Terraform + AWS (single `staging` env, public for debugging) provisioned from GitHub Actions over OIDC | Accepted |
+| [0021](0021-connections-before-adapters.md) | An ERP connection can exist before its adapter does; `hasAdapter` is derived, not stored | Accepted |
+| [0022](0022-mapping-dedupe-by-erp-type.md) | Mapping/codegen is deduped per ERP type (registry + pending-job check), not per connection | Accepted |
+| [0023](0023-azure-migration.md) | Migrate infrastructure off AWS onto Azure, service-for-service, behind the existing ports | Proposed |
 
 ## How to read one
 

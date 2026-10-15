@@ -12,20 +12,30 @@ from typing import TYPE_CHECKING
 import strawberry
 from strawberry.extensions import QueryDepthLimiter
 
+from src.modules.integration.mapping.domain.canonical_order_schema import (
+    build_canonical_order_fields_csv,
+)
 from src.modules.integration.mapping.domain.errors import (
     CanonicalSchemaNotFound,
+    ConnectionNotFound,
     EmptyCanonicalSchema,
+    ErpTypeNotEligible,
     MappingJobNotFound,
     MappingNotReady,
     NoCanonicalFields,
+    ProbeFailed,
 )
 from src.modules.reference.connections.application.service import ConnectionService
-from src.modules.reference.connections.domain.models import ErpConnection, ErpType
+from src.modules.reference.connections.domain.errors import (
+    ConnectionNotFound as ConnectionNotFoundRef,
+)
 from src.modules.reference.tenancy.application.service import BindingService
+from src.shared.erp_probe import SampleRequestSpec
 from src.shared.types import BindingId, ConnectionId, TenantId
 
 from .types import (
     AdapterRunType,
+    AuthConfigInput,
     BindingType,
     CanonicalSchemaType,
     ConnectionType,
@@ -39,20 +49,29 @@ from .types import (
     OperatorPartiesType,
     OperatorTimelineEntryType,
     OrderEventType,
+    ProbeSampleType,
+    ResellerType,
     SampleFileInput,
+    SampleRequestInput,
     SubsidiaryType,
+    SuggestedRequestType,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from strawberry.types import Info
 
     from src.modules.integration.mapping.domain.models import (
         AdapterRunResult,
         MappingJob,
     )
-    from src.modules.reference.tenancy.domain.models import TenantConnectionBinding
+    from src.modules.integration.mapping.domain.request_suggestion import SuggestedSampleRequest
+    from src.modules.reference.connections.domain.models import ErpConnection
+    from src.modules.reference.tenancy.domain.models import Reseller, TenantConnectionBinding
     from src.modules.sales.ordering.projections.read_models import OperatorOrderView
     from src.modules.sales.quoting.domain.models import Subsidiary
+    from src.shared.erp_probe import ProbeSample
     from src.shared.money import Money
 
     from ..context import GraphQLContext
@@ -103,16 +122,22 @@ def _order_to_gql(view: OperatorOrderView) -> OperatorOrder:
     )
 
 
-def _connection_to_gql(connection: ErpConnection) -> ConnectionType:
+def _connection_to_gql(
+    connection: ErpConnection,
+    has_adapter: Callable[[str], bool],
+    mapping_status: Callable[[ErpConnection], str],
+) -> ConnectionType:
     return ConnectionType(
         connection_id=str(connection.connection_id),
-        erp_type=connection.erp_type.value,
+        erp_type=connection.erp_type,
         instance_label=connection.instance_label,
         base_url=connection.base_url,
         credentials=dict(connection.credentials),
         status=connection.status.value,
         secret_ref=connection.secret_ref,
         has_webhook_secret=connection.webhook_secret_ref is not None,
+        has_adapter=has_adapter(connection.erp_type),
+        mapping_status=mapping_status(connection),
     )
 
 
@@ -124,6 +149,10 @@ def _binding_to_gql(binding: TenantConnectionBinding) -> BindingType:
         erp_customer_id=binding.erp_customer_id,
         status=binding.status.value,
     )
+
+
+def _reseller_to_gql(reseller: Reseller) -> ResellerType:
+    return ResellerType(tenant_id=str(reseller.tenant_id), name=reseller.name)
 
 
 def _company_to_gql(company: Subsidiary) -> SubsidiaryType:
@@ -154,6 +183,25 @@ def _mapping_job_to_gql(job: MappingJob) -> MappingJobType:
         created_at=job.created_at.isoformat(),
         schema_name=job.schema_name,
         sample_files=list(job.sample_exports),
+    )
+
+
+def _probe_sample_to_gql(sample: ProbeSample) -> ProbeSampleType:
+    return ProbeSampleType(label=sample.label, text=sample.text, error=sample.error)
+
+
+def _sample_requests_from_input(requests: list[SampleRequestInput]) -> list[SampleRequestSpec]:
+    return [
+        SampleRequestSpec(
+            label=r.label, method=r.method, path=r.path, query_params=dict(r.query_params)
+        )
+        for r in requests
+    ]
+
+
+def _suggested_request_to_gql(suggestion: SuggestedSampleRequest) -> SuggestedRequestType:
+    return SuggestedRequestType(
+        label=suggestion.label, method=suggestion.method, path=suggestion.path
     )
 
 
@@ -220,13 +268,23 @@ class Query:
     def connections(self, info: Info[GraphQLContext, None]) -> list[ConnectionType]:
         ctx = info.context
         ctx.require_role("OPERATOR")
-        return [_connection_to_gql(c) for c in ctx.container.connections.list_all()]
+        connections = ctx.container.connections.list_all()
+        mapping_status = ctx.container.mapping_service.connection_mapping_status
+        return [
+            _connection_to_gql(c, ctx.container.has_adapter, mapping_status) for c in connections
+        ]
 
     @strawberry.field
     def bindings(self, info: Info[GraphQLContext, None]) -> list[BindingType]:
         ctx = info.context
         ctx.require_role("OPERATOR")
         return [_binding_to_gql(b) for b in ctx.container.bindings.list_all()]
+
+    @strawberry.field
+    def resellers(self, info: Info[GraphQLContext, None]) -> list[ResellerType]:
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        return [_reseller_to_gql(r) for r in ctx.container.resellers.list_all()]
 
     @strawberry.field
     def subsidiaries(self, info: Info[GraphQLContext, None]) -> list[SubsidiaryType]:
@@ -261,11 +319,34 @@ class Query:
         ]
 
     @strawberry.field
+    def canonical_order_schema(self, info: Info[GraphQLContext, None]) -> str:
+        """The "our order fields" CSV an operator used to have to type by hand — derived
+        live from the real adapter contract (`ErpPartnerOrder` et al. in
+        `integration.erp`). Add a field there and it's here on the next request; no
+        file to maintain, no button to press."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        return build_canonical_order_fields_csv()
+
+    @strawberry.field
     def mapping_jobs(self, info: Info[GraphQLContext, None]) -> list[MappingJobType]:
         """Every proposal, newest first. Several ERPs can be in flight at once."""
         ctx = info.context
         ctx.require_role("OPERATOR")
         return [_mapping_job_to_gql(job) for job in ctx.container.mapping_service.list_jobs()]
+
+    @strawberry.field
+    def mappable_connections(self, info: Info[GraphQLContext, None]) -> list[ConnectionType]:
+        """What the Mapping page's connection picker offers (ADR-0021/0022): connections
+        whose `erp_type` has no adapter yet and no mapping job already in flight or
+        approved for it."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        mapping_status = ctx.container.mapping_service.connection_mapping_status
+        return [
+            _connection_to_gql(c, ctx.container.has_adapter, mapping_status)
+            for c in ctx.container.mapping_service.eligible_connections()
+        ]
 
     @strawberry.field
     def mapping_job(self, info: Info[GraphQLContext, None], job_id: str) -> MappingJobType | None:
@@ -298,21 +379,39 @@ class Mutation:
         instance_label: str,
         base_url: str,
         credentials: strawberry.scalars.JSON,
-        secret_ref: str,
+        auth: AuthConfigInput,
         webhook_secret_ref: str | None = None,
     ) -> ConnectionType:
+        """`credentials` is the generic, adapter-interpreted bag (ADR-0012) — e.g. Odoo's
+        `database`/`username`. `auth` is read only by the onboarding probe for a
+        connection with no adapter yet (ADR-0021): `auth.params` merge into the same
+        `credentials` bag, `auth.authType` is stored alongside it, and `auth.secret` is
+        the raw credential (password/API key/token) — generated into Secrets Manager
+        here, never hand-pasted as a `secretRef`."""
         ctx = info.context
         ctx.require_role("OPERATOR")
-        service = ConnectionService(ctx.container.connections, ctx.container.facts)
-        connection = service.register(
-            erp_type=ErpType(erp_type),
-            instance_label=instance_label,
-            base_url=base_url,
-            credentials={str(k): str(v) for k, v in dict(credentials).items()},
-            secret_ref=secret_ref,
-            webhook_secret_ref=webhook_secret_ref,
+        service = ConnectionService(
+            ctx.container.connections,
+            ctx.container.facts,
+            ctx.container.secrets,
+            ctx.container.erp_probe,
         )
-        return _connection_to_gql(connection)
+        merged_credentials = {str(k): str(v) for k, v in dict(credentials).items()}
+        merged_credentials.update({str(k): str(v) for k, v in dict(auth.params).items()})
+        try:
+            connection = service.register(
+                erp_type=erp_type,
+                instance_label=instance_label,
+                base_url=base_url,
+                credentials=merged_credentials,
+                secret=auth.secret,
+                auth_type=auth.auth_type,
+                webhook_secret_ref=webhook_secret_ref,
+            )
+        except ValueError as e:
+            raise Exception(str(e)) from e
+        mapping_status = ctx.container.mapping_service.connection_mapping_status
+        return _connection_to_gql(connection, ctx.container.has_adapter, mapping_status)
 
     @strawberry.mutation
     def create_binding(
@@ -321,6 +420,7 @@ class Mutation:
         tenant_id: str,
         connection_id: str,
         erp_customer_id: str,
+        name: str,
     ) -> BindingType:
         ctx = info.context
         ctx.require_role("OPERATOR")
@@ -330,7 +430,19 @@ class Mutation:
             connection_id=ConnectionId(connection_id),
             erp_customer_id=erp_customer_id,
         )
+        ctx.container.resellers.upsert(TenantId(tenant_id), name)
         return _binding_to_gql(binding)
+
+    @strawberry.mutation
+    def rename_reseller(
+        self, info: Info[GraphQLContext, None], tenant_id: str, name: str
+    ) -> ResellerType:
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        ctx.container.resellers.upsert(TenantId(tenant_id), name)
+        reseller = ctx.container.resellers.get(TenantId(tenant_id))
+        assert reseller is not None
+        return _reseller_to_gql(reseller)
 
     @strawberry.mutation
     def verify_binding(self, info: Info[GraphQLContext, None], binding_id: str) -> BindingType:
@@ -346,8 +458,15 @@ class Mutation:
     ) -> ConnectionType:
         ctx = info.context
         ctx.require_role("OPERATOR")
-        service = ConnectionService(ctx.container.connections, ctx.container.facts)
-        return _connection_to_gql(service.pause(ConnectionId(connection_id)))
+        service = ConnectionService(
+            ctx.container.connections,
+            ctx.container.facts,
+            ctx.container.secrets,
+            ctx.container.erp_probe,
+        )
+        connection = service.pause(ConnectionId(connection_id))
+        mapping_status = ctx.container.mapping_service.connection_mapping_status
+        return _connection_to_gql(connection, ctx.container.has_adapter, mapping_status)
 
     @strawberry.mutation
     def resume_connection(
@@ -355,8 +474,37 @@ class Mutation:
     ) -> ConnectionType:
         ctx = info.context
         ctx.require_role("OPERATOR")
-        service = ConnectionService(ctx.container.connections, ctx.container.facts)
-        return _connection_to_gql(service.resume(ConnectionId(connection_id)))
+        service = ConnectionService(
+            ctx.container.connections,
+            ctx.container.facts,
+            ctx.container.secrets,
+            ctx.container.erp_probe,
+        )
+        connection = service.resume(ConnectionId(connection_id))
+        mapping_status = ctx.container.mapping_service.connection_mapping_status
+        return _connection_to_gql(connection, ctx.container.has_adapter, mapping_status)
+
+    @strawberry.mutation
+    def test_erp_endpoint(
+        self, info: Info[GraphQLContext, None], connection_id: str, path: str = ""
+    ) -> ProbeSampleType:
+        """Reachability + auth check for an existing connection (ADR-0021): fires one
+        request at `path` against its stored base URL and credentials, returning what came
+        back (or the ERP's error). Works for any connection, adapter or not — distinct from
+        `probeErpSamples`, which gates on mapping eligibility and serves onboarding only."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        service = ConnectionService(
+            ctx.container.connections,
+            ctx.container.facts,
+            ctx.container.secrets,
+            ctx.container.erp_probe,
+        )
+        try:
+            sample = service.test_endpoint(ConnectionId(connection_id), path=path)
+        except ConnectionNotFoundRef as e:
+            raise Exception(str(e)) from e
+        return _probe_sample_to_gql(sample)
 
     @strawberry.mutation
     def remove_binding(self, info: Info[GraphQLContext, None], binding_id: str) -> BindingType:
@@ -429,27 +577,124 @@ class Mutation:
     def submit_mapping(
         self,
         info: Info[GraphQLContext, None],
-        erp_name: str,
+        connection_id: str,
         sample_files: list[SampleFileInput],
         schema_name: str | None = None,
         canonical_fields_csv: str | None = None,
     ) -> MappingJobType:
         """Submit an ERP's sample export(s) for a draft mapping against a canonical field
-        list (a registered `schemaName` OR an inline `canonicalFieldsCsv`). Returns the
-        enqueued job; poll `mappingJob(jobId)` for the result."""
+        list (a registered `schemaName` OR an inline `canonicalFieldsCsv`). `connectionId`
+        must be one of `mappableConnections` (ADR-0021/0022) — the manual-upload fallback
+        for whatever auth the live probe can't handle. Returns the enqueued job; poll
+        `mappingJob(jobId)` for the result."""
         ctx = info.context
         ctx.require_role("OPERATOR")
         try:
             job = ctx.container.mapping_service.submit_job(
-                erp_name=erp_name,
+                connection_id=connection_id,
                 sample_files={f.filename: f.content for f in sample_files},
                 schema_name=schema_name,
                 canonical_fields_csv=canonical_fields_csv,
             )
-        except (CanonicalSchemaNotFound, EmptyCanonicalSchema, NoCanonicalFields, ValueError) as e:
+        except (
+            CanonicalSchemaNotFound,
+            EmptyCanonicalSchema,
+            NoCanonicalFields,
+            ConnectionNotFound,
+            ErpTypeNotEligible,
+            ValueError,
+        ) as e:
             raise Exception(str(e)) from e
         # Memory profile has no worker — process inline so the result is ready on the next
         # poll. In the postgres profile this is a no-op; the `mapping` worker role runs it.
+        ctx.container.mapping_process_pending()
+        refreshed = ctx.container.mapping_service.get_job(job.job_id)
+        return _mapping_job_to_gql(refreshed if refreshed is not None else job)
+
+    @strawberry.mutation
+    def probe_erp_samples(
+        self,
+        info: Info[GraphQLContext, None],
+        connection_id: str,
+        requests: list[SampleRequestInput],
+    ) -> list[ProbeSampleType]:
+        """Test an already-registered connection before committing to a mapping job
+        (ADR-0021): fires each sample request using that connection's stored auth, and
+        returns what came back (or the error), with no job created yet."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            results = ctx.container.mapping_service.probe_samples(
+                connection_id=connection_id,
+                requests=_sample_requests_from_input(requests),
+            )
+        except (ConnectionNotFound, ErpTypeNotEligible, ValueError) as e:
+            raise Exception(str(e)) from e
+        return [_probe_sample_to_gql(s) for s in results]
+
+    @strawberry.mutation
+    def suggest_sample_requests(
+        self,
+        info: Info[GraphQLContext, None],
+        connection_id: str,
+        schema_name: str | None = None,
+        canonical_fields_csv: str | None = None,
+    ) -> list[SuggestedRequestType]:
+        """An LLM's best guess at which record kinds (and REST paths) to pull live from
+        this connection's ERP, grounded in whichever canonical fields were picked above —
+        a starting point for "Sample requests", never fired itself. Every suggestion is
+        still just a label/method/path the operator sees and can edit before anything
+        actually calls out (`probeErpSamples`/`submitMappingFromProbe`)."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            suggestions = ctx.container.sample_request_suggestion.suggest(
+                connection_id=connection_id,
+                schema_name=schema_name,
+                canonical_fields_csv=canonical_fields_csv,
+            )
+        except (
+            CanonicalSchemaNotFound,
+            EmptyCanonicalSchema,
+            NoCanonicalFields,
+            ConnectionNotFound,
+            ErpTypeNotEligible,
+            ValueError,
+        ) as e:
+            raise Exception(str(e)) from e
+        return [_suggested_request_to_gql(s) for s in suggestions]
+
+    @strawberry.mutation
+    def submit_mapping_from_probe(
+        self,
+        info: Info[GraphQLContext, None],
+        connection_id: str,
+        requests: list[SampleRequestInput],
+        schema_name: str | None = None,
+        canonical_fields_csv: str | None = None,
+    ) -> MappingJobType:
+        """Probes the connection live, then submits the fetched samples as a mapping job —
+        same downstream review/approve flow as `submitMapping`. Raises if any sample
+        request failed, since a partial sample set would silently bias the proposal."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            job = ctx.container.mapping_service.submit_job_from_probe(
+                connection_id=connection_id,
+                requests=_sample_requests_from_input(requests),
+                schema_name=schema_name,
+                canonical_fields_csv=canonical_fields_csv,
+            )
+        except (
+            CanonicalSchemaNotFound,
+            EmptyCanonicalSchema,
+            NoCanonicalFields,
+            ConnectionNotFound,
+            ErpTypeNotEligible,
+            ProbeFailed,
+            ValueError,
+        ) as e:
+            raise Exception(str(e)) from e
         ctx.container.mapping_process_pending()
         refreshed = ctx.container.mapping_service.get_job(job.job_id)
         return _mapping_job_to_gql(refreshed if refreshed is not None else job)

@@ -4,14 +4,23 @@ import { graphqlRequest } from "../api/client";
 import {
   ADAPTER_RUN_QUERY,
   APPROVE_MAPPING_MUTATION,
+  CANONICAL_ORDER_SCHEMA_QUERY,
   CANONICAL_SCHEMAS_QUERY,
+  MAPPABLE_CONNECTIONS_QUERY,
   MAPPING_JOBS_QUERY,
   MAPPING_JOB_QUERY,
+  PROBE_ERP_SAMPLES_MUTATION,
   REGISTER_CANONICAL_SCHEMA_MUTATION,
+  SUBMIT_MAPPING_FROM_PROBE_MUTATION,
   SUBMIT_MAPPING_MUTATION,
+  SUGGEST_SAMPLE_REQUESTS_MUTATION,
   type AdapterRun,
   type CanonicalSchema,
+  type MappableConnection,
   type MappingJob,
+  type ProbeSample,
+  type SampleRequestInput,
+  type SuggestedRequest,
 } from "../api/queries/mapping";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
@@ -44,6 +53,23 @@ export function useCanonicalSchemas() {
   });
 }
 
+// No button, no manual upkeep: refetched whenever the page mounts, so a field added to
+// the real order model shows up here on the operator's next visit.
+export function useCanonicalOrderSchema() {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["canonicalOrderSchema"],
+    queryFn: () =>
+      graphqlRequest<{ canonicalOrderSchema: string }>(
+        "operator",
+        CANONICAL_ORDER_SCHEMA_QUERY,
+        {},
+        idToken,
+      ).then((d) => d.canonicalOrderSchema),
+    enabled: isAuthenticated,
+  });
+}
+
 export function useRegisterCanonicalSchema() {
   const { idToken } = useAuth();
   const queryClient = useQueryClient();
@@ -59,28 +85,100 @@ export function useRegisterCanonicalSchema() {
   });
 }
 
+export function useMappableConnections() {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["mappableConnections"],
+    queryFn: () =>
+      graphqlRequest<{ mappableConnections: MappableConnection[] }>(
+        "operator",
+        MAPPABLE_CONNECTIONS_QUERY,
+        {},
+        idToken,
+      ).then((d) => d.mappableConnections),
+    enabled: isAuthenticated,
+  });
+}
+
 export function useSubmitMapping() {
   const { idToken } = useAuth();
   const queryClient = useQueryClient();
   const { notify } = useToast();
   return useMutation({
     mutationFn: (input: {
-      erpName: string;
+      connectionId: string;
       sampleFiles: SampleFile[];
       schemaName?: string | null;
       canonicalFieldsCsv?: string | null;
     }) =>
-      graphqlRequest<
-        { submitMapping: { jobId: string; status: string } },
-        {
-          erpName: string;
-          sampleFiles: SampleFile[];
-          schemaName?: string | null;
-          canonicalFieldsCsv?: string | null;
-        }
-      >("operator", SUBMIT_MAPPING_MUTATION, input, idToken).then((d) => d.submitMapping),
+      graphqlRequest<{ submitMapping: { jobId: string; status: string } }, typeof input>(
+        "operator",
+        SUBMIT_MAPPING_MUTATION,
+        input,
+        idToken,
+      ).then((d) => d.submitMapping),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mappingJobs"] });
+      queryClient.invalidateQueries({ queryKey: ["mappableConnections"] });
+    },
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
+export function useProbeErpSamples() {
+  const { idToken } = useAuth();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: { connectionId: string; requests: SampleRequestInput[] }) =>
+      graphqlRequest<{ probeErpSamples: ProbeSample[] }, typeof input>(
+        "operator",
+        PROBE_ERP_SAMPLES_MUTATION,
+        input,
+        idToken,
+      ).then((d) => d.probeErpSamples),
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
+export function useSuggestSampleRequests() {
+  const { idToken } = useAuth();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: {
+      connectionId: string;
+      schemaName?: string | null;
+      canonicalFieldsCsv?: string | null;
+    }) =>
+      graphqlRequest<{ suggestSampleRequests: SuggestedRequest[] }, typeof input>(
+        "operator",
+        SUGGEST_SAMPLE_REQUESTS_MUTATION,
+        input,
+        idToken,
+      ).then((d) => d.suggestSampleRequests),
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
+export function useSubmitMappingFromProbe() {
+  const { idToken } = useAuth();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: {
+      connectionId: string;
+      requests: SampleRequestInput[];
+      schemaName?: string | null;
+      canonicalFieldsCsv?: string | null;
+    }) =>
+      graphqlRequest<{ submitMappingFromProbe: { jobId: string; status: string } }, typeof input>(
+        "operator",
+        SUBMIT_MAPPING_FROM_PROBE_MUTATION,
+        input,
+        idToken,
+      ).then((d) => d.submitMappingFromProbe),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mappingJobs"] });
+      queryClient.invalidateQueries({ queryKey: ["mappableConnections"] });
     },
     onError: (err) => notify((err as Error).message, "danger"),
   });

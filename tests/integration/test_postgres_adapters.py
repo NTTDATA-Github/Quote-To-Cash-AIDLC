@@ -20,7 +20,7 @@ from src.modules.integration.webhooks_inbound.infrastructure.postgres import (  
     PostgresDedupStore,
     PostgresOrderLocator,
 )
-from src.modules.reference.connections.domain.models import ErpConnection, ErpType  # noqa: E402
+from src.modules.reference.connections.domain.models import ErpConnection  # noqa: E402
 from src.modules.reference.connections.infrastructure.postgres import (  # noqa: E402
     PostgresConnectionRepository,
 )
@@ -92,7 +92,7 @@ def _make_connection() -> ErpConnection:
     create a real one first, not just mint a random id."""
     conn = ErpConnection(
         connection_id=ConnectionId(_id("conn")),
-        erp_type=ErpType.ODOO,
+        erp_type="ODOO",
         instance_label="Test Odoo",
         base_url="http://odoo:8069",
         credentials={"database": "odoo", "username": "admin"},

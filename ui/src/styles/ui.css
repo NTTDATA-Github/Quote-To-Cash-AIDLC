@@ -159,6 +159,101 @@ textarea.input { height: auto; padding: var(--space-2) var(--space-3); }
 .mapflow-example { font: 400 12px/16px var(--font-mono); }
 .mapflow-link { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--ink-muted); }
 
+/* A guided multi-step flow (ERP onboarding) reads as progress, not a stack of forms. */
+.wizard-steps { display: flex; gap: var(--space-5); list-style: none; padding: 0; margin: 0 0 var(--space-2); }
+.wizard-steps li { display: flex; align-items: center; gap: var(--space-2); color: var(--ink-muted); font: 500 13px/20px var(--font-sans); }
+.wizard-steps li.is-active { color: var(--ink); font-weight: 600; }
+.wizard-steps li.is-done { color: var(--ink-muted); }
+.wizard-steps__dot {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  border: 1.5px solid var(--line-strong); font: 600 12px/16px var(--font-sans); flex: none;
+}
+.wizard-steps li.is-active .wizard-steps__dot { border-color: var(--brand); color: var(--brand); }
+.wizard-steps li.is-done .wizard-steps__dot { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
+
+/* A grid of selectable cards — picking a connection/provider, not filling a <select>. */
+.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-3); }
+.pickcard {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left;
+  padding: var(--space-3) var(--space-4); background: var(--surface-raised); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg); cursor: pointer; font: inherit; color: inherit;
+}
+.pickcard:hover { border-color: var(--brand); box-shadow: var(--shadow-lift); }
+.pickcard.is-selected { border-color: var(--brand); background: var(--brand-soft); }
+.pickcard__icon { color: var(--brand); }
+.pickcard__label { font: 600 14px/20px var(--font-sans); }
+.pickcard__meta { color: var(--ink-muted); font-size: 12px; }
+
+.empty-card {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2); text-align: center;
+  padding: var(--space-6) var(--space-4); color: var(--ink-muted); border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+}
+.empty-card svg { color: var(--brand); }
+.empty-card p { margin: 0; }
+
+.connection-card {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4);
+  background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+.connection-card__head { display: flex; align-items: center; gap: var(--space-2); color: var(--brand); }
+.connection-card__mark svg { width: 20px; height: 20px; }
+.connection-card__label { font: 600 14px/20px var(--font-sans); color: var(--ink); }
+.connection-card__meta { color: var(--ink-muted); font-size: 12px; }
+.connection-card__badges { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.connection-card__url { color: var(--ink-muted); font-size: 12px; overflow-wrap: anywhere; }
+
+/* Two stacked bits in one table cell (label over URL, actions over a test result). */
+.rule { border: none; border-top: 1px solid var(--line); margin: var(--space-2) 0; }
+.cell-stack { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.test-result { display: inline-flex; align-items: center; gap: 4px; font: 400 12px/16px var(--font-sans); }
+.test-result--success { color: var(--status-success-fg); }
+.test-result--danger { color: var(--status-danger-fg); overflow-wrap: anywhere; }
+
+/* Status tiles that double as one-click filters — the scale of a list at a glance,
+   per design/proposals' pattern (ADR: design-system catch-up, 2026-10-15). */
+.filtertiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); }
+.filtertile {
+  text-align: left; padding: var(--space-3) var(--space-4); background: var(--surface-raised);
+  border: 1px solid var(--line); border-radius: var(--radius-lg); cursor: pointer;
+  display: flex; flex-direction: column; gap: 2px; font: inherit; color: inherit;
+}
+.filtertile:hover { background: var(--surface-sunken); }
+.filtertile:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.filtertile[aria-pressed="true"] { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+.filtertile b { font: 600 24px/32px var(--font-sans); font-variant-numeric: tabular-nums; }
+.filtertile span { color: var(--ink-muted); font: 400 12px/16px var(--font-sans); display: flex; align-items: center; gap: 6px; }
+.tiledot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.tiledot--success { background: var(--status-success-fg); }
+.tiledot--warning { background: var(--status-warning-fg); }
+.tiledot--danger { background: var(--status-danger-fg); }
+.tiledot--neutral { background: var(--status-neutral-fg); }
+.tiledot--progress { background: var(--status-progress-fg); }
+
+/* Compact mapping rows for the narrow review inspector — the full-width .mapflow
+   (ERP field beside our field) doesn't fit 380px, so stack it: ERP field + confidence on
+   top, the field it becomes below. */
+.maprows { display: flex; flex-direction: column; gap: var(--space-2); }
+.maprow {
+  display: flex; flex-direction: column; gap: 3px; padding: var(--space-3);
+  background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-md);
+}
+.maprow__top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.maprow__erp { font: 600 13px/18px var(--font-mono); color: var(--ink); overflow-wrap: anywhere; }
+.maprow__ours { color: var(--ink-muted); font: 400 12px/16px var(--font-sans); overflow-wrap: anywhere; }
+.maprow__ours b { color: var(--ink); font-weight: 600; }
+.maprow__example { color: var(--ink-muted); font: 400 11px/15px var(--font-mono); overflow-wrap: anywhere; }
+
+/* A list with a sticky single-record inspector beside it, instead of a full-width
+   stacked panel — the same frame for every "many records, one careful at a time" screen. */
+.inspector-split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: var(--space-6); align-items: start; }
+.inspector { position: sticky; top: var(--space-6); max-height: calc(100vh - 120px); overflow: auto; }
+@media (max-width: 1000px) {
+  .inspector-split { grid-template-columns: 1fr; }
+  .inspector { position: static; max-height: none; }
+}
+
 /* Real app runs full window height, unlike the fixed-size mockup canvases. */
 html, body, #root { height: 100%; margin: 0; }
 .app { height: 100vh; }
@@ -195,6 +290,45 @@ html, body, #root { height: 100%; margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   .drawer, .drawer-backdrop { animation: none; }
 }
+
+/* ---- Modal: centered dialog, for a focused choice or walkthrough ---- */
+.modal-layer { position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(16, 24, 40, 0.5); animation: drawer-fade 160ms ease; }
+.modal {
+  position: relative;
+  max-height: 86vh;
+  background: var(--surface);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-overlay);
+  display: flex; flex-direction: column;
+  animation: modal-pop-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.modal__head {
+  padding: var(--space-5) var(--space-6) 0;
+  flex: none;
+}
+.modal__title { font: 600 18px/26px var(--font-sans); color: var(--ink); }
+.modal__body { flex: 1; overflow-y: auto; padding: var(--space-5) var(--space-6); }
+.modal__foot {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2);
+  padding: var(--space-4) var(--space-6); border-top: 1px solid var(--line); flex: none;
+}
+@keyframes modal-pop-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .modal, .modal-backdrop { animation: none; }
+}
+
+/* ---- Product tour (components/ProductTour.tsx) ---- */
+.tour__prompt { color: var(--ink-muted); font: 400 14px/22px var(--font-sans); margin: 0; }
+.tour__step { display: flex; gap: var(--space-4); align-items: flex-start; }
+.tour__icon {
+  flex: none; width: 40px; height: 40px; border-radius: var(--radius-md, 8px);
+  background: var(--surface-raised); border: 1px solid var(--line);
+  display: grid; place-items: center; color: var(--brand);
+}
+.tour__step p { margin: 0; color: var(--ink-muted); font: 400 14px/22px var(--font-sans); }
+.tour__dots { margin-top: var(--space-5); justify-content: center; gap: var(--space-2); }
+.tour__dots li { gap: 0; }
 
 /* ---- Kanban board (components/KanbanBoard.tsx) ---- */
 .kboard { display: flex; gap: var(--space-4); align-items: flex-start; overflow-x: auto; padding-bottom: var(--space-2); }

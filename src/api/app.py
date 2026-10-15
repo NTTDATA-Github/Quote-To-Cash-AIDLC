@@ -1,10 +1,12 @@
 """FastAPI composition root: mounts GraphQL (reseller + operator) + HTTP (webhooks, health).
 
 Security headers (SECURITY-04) are applied to all responses. Tenant/roles come from
-`container.identity` — the header stub in the memory profile and whenever Cognito isn't
-configured, real Cognito JWT verification once it is (`composition._resolve_identity_provider`).
+`container.identity` — the header stub in the memory profile and whenever Cognito/Entra
+isn't configured, real JWT verification (Cognito or Entra, per `CLOUD_PROVIDER` —
+ADR-0023) once it is (`composition._resolve_identity_provider`).
 CORS is restricted to `Settings.cors_allowed_origins` (SEC-08) — the UI is a separate
-origin (S3/CloudFront in prod, the Vite dev server locally), not same-origin with the API.
+origin (S3/CloudFront on AWS, Storage/Front Door on Azure, the Vite dev server locally),
+not same-origin with the API.
 """
 
 from __future__ import annotations

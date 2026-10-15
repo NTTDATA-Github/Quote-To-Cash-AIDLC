@@ -1,7 +1,10 @@
 # Adding a new ERP
 
-The platform currently has one registered ERP: **Odoo**. This is the checklist for
-adding another one (ERPNext, SAP, NetSuite, …) — four files, no scattered edits.
+The platform has two registered ERPs: **Odoo** (live) and **NetSuite** (verified against an
+in-process SuiteTalk REST mock, `scripts/mock_netsuite.py` — polling-only, see
+`docs/erps/netsuite/`). This is the checklist for adding another one (ERPNext, SAP, …) —
+four files, no scattered edits. NetSuite is the most recent worked example of all four
+touch points plus a faithful mock.
 
 ## The four touch points
 

@@ -4,6 +4,13 @@ Screen designs and design system for the reseller portal and the operator admin.
 
 **Status**: Proposed designs, generated from `aidlc-docs/inception/requirements/requirements.md`. Sample data is fictional. Behavior marked *proposed* below is not yet in the requirements.
 
+**2026-10-15 update**: ERP connections and ERP mapping have since been built and shipped,
+and diverged from `proposals/` in ways worth knowing before reusing these mocks — see the
+status note at the top of `proposals/README.md`. The current source of truth for those two
+screens is `aidlc-docs/construction/U4-admin/functional-design/frontend-components.md`; the
+component-level rules below (badge roles, button variants, density, accessibility) are
+still followed by the real implementation.
+
 **Original canvas** (private, needs sharing to open): https://claude.ai/artifact/6eBqj5D5HxF6heLE2DKkqy
 **Design system**: https://claude.ai/artifact/NpEvLYzy99C4C1ishLaM4d
 

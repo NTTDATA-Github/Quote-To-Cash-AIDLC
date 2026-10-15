@@ -8,6 +8,8 @@ import {
   CREATE_SUBSIDIARY_MUTATION,
   ERP_ROUTE_QUERY,
   SUBSIDIARIES_QUERY,
+  RESELLERS_QUERY,
+  RENAME_RESELLER_MUTATION,
   NOTIFICATIONS_QUERY,
   OPERATOR_ORDERS_QUERY,
   OPERATOR_ORDER_QUERY,
@@ -16,13 +18,16 @@ import {
   REMOVE_BINDING_MUTATION,
   RESUME_CONNECTION_MUTATION,
   SET_ERP_ROUTE_MUTATION,
+  TEST_ERP_ENDPOINT_MUTATION,
   VERIFY_BINDING_MUTATION,
   type Binding,
   type Connection,
   type Subsidiary,
+  type Reseller,
   type NotificationDelivery,
   type OperatorOrder,
 } from "../api/queries/admin";
+import type { AuthConfigInput, ProbeSample } from "../api/queries/mapping";
 import { useAuth } from "../auth/AuthContext";
 import { useToast } from "../components/Toast";
 
@@ -110,11 +115,21 @@ export function useRegisterConnection() {
       instanceLabel: string;
       baseUrl: string;
       credentials: Record<string, string>;
-      secretRef: string;
+      auth: AuthConfigInput;
       webhookSecretRef?: string;
-    }) => graphqlRequest("operator", REGISTER_CONNECTION_MUTATION, input, idToken),
+    }) =>
+      graphqlRequest<
+        { registerConnection: { connectionId: string; hasAdapter: boolean; mappingStatus: string } },
+        typeof input
+      >(
+        "operator",
+        REGISTER_CONNECTION_MUTATION,
+        input,
+        idToken,
+      ).then((d) => d.registerConnection),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["connections"] });
+      queryClient.invalidateQueries({ queryKey: ["mappableConnections"] });
       notify("Connection registered.");
     },
     onError: (err) => notify((err as Error).message, "danger"),
@@ -149,15 +164,31 @@ export function useResumeConnection() {
   });
 }
 
+export function useTestErpEndpoint() {
+  const { idToken } = useAuth();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: { connectionId: string; path: string }) =>
+      graphqlRequest<{ testErpEndpoint: ProbeSample }, typeof input>(
+        "operator",
+        TEST_ERP_ENDPOINT_MUTATION,
+        input,
+        idToken,
+      ).then((d) => d.testErpEndpoint),
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
 export function useCreateBinding() {
   const { idToken } = useAuth();
   const queryClient = useQueryClient();
   const { notify } = useToast();
   return useMutation({
-    mutationFn: (input: { tenantId: string; connectionId: string; erpCustomerId: string }) =>
+    mutationFn: (input: { tenantId: string; connectionId: string; erpCustomerId: string; name: string }) =>
       graphqlRequest("operator", CREATE_BINDING_MUTATION, input, idToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bindings"] });
+      queryClient.invalidateQueries({ queryKey: ["resellers"] });
       notify("Reseller linked to connection.");
     },
     onError: (err) => notify((err as Error).message, "danger"),
@@ -216,6 +247,31 @@ export function useSubsidiaries() {
         (d) => d.subsidiaries,
       ),
     enabled: isAuthenticated,
+  });
+}
+
+export function useResellers() {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["resellers"],
+    queryFn: () =>
+      graphqlRequest<{ resellers: Reseller[] }>("operator", RESELLERS_QUERY, {}, idToken).then((d) => d.resellers),
+    enabled: isAuthenticated,
+  });
+}
+
+export function useRenameReseller() {
+  const { idToken } = useAuth();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: { tenantId: string; name: string }) =>
+      graphqlRequest("operator", RENAME_RESELLER_MUTATION, input, idToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["resellers"] });
+      notify("Reseller renamed.");
+    },
+    onError: (err) => notify((err as Error).message, "danger"),
   });
 }
 

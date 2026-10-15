@@ -1,7 +1,7 @@
 [project]
 name = "order-to-cash-connector"
 version = "0.1.0"
-description = "ERP & Supply Chain Order Portal — event-sourced, AWS-native, multi-tenant order routing."
+description = "ERP & Supply Chain Order Portal — event-sourced, multi-cloud (AWS/Azure), multi-tenant order routing."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi==0.115.0",
@@ -14,6 +14,9 @@ dependencies = [
     # 3.3 moved ExecutionContext; strawberry 0.246 cannot import it.
     "graphql-core>=3.2.0,<3.3.0",
     "boto3==1.35.36",
+    "azure-identity==1.19.0",
+    "azure-keyvault-secrets==4.9.0",
+    "azure-servicebus==7.12.3",
     "PyJWT==2.9.0",
     "cryptography==50.0.1",  # PyJWT's RS256 backend — Cognito JWTs are always RS256
     "pyotp==2.9.0",
@@ -89,7 +92,7 @@ layers = [
 name = "Domain is framework-free (no cloud SDK / web framework in domain or shared kernel)"
 type = "forbidden"
 source_modules = ["src.modules", "src.shared.eventsourcing"]
-forbidden_modules = ["boto3", "fastapi", "strawberry"]
+forbidden_modules = ["boto3", "azure", "fastapi", "strawberry"]
 
 # `reference` is master data (catalog/connections/tenancy) — a leaf subdomain. It must not
 # depend on the order-lifecycle (`sales`) or edge (`integration`) groups; those depend on

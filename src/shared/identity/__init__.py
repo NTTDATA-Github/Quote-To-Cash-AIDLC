@@ -9,10 +9,12 @@ pattern as every other cross-cutting concern (secrets, event store, ERP adapters
 from __future__ import annotations
 
 from .cognito import CognitoIdentityProvider
+from .entra import EntraIdentityProvider
 from .provider import HeaderStubIdentityProvider, IdentityProvider, Principal
 
 __all__ = [
     "CognitoIdentityProvider",
+    "EntraIdentityProvider",
     "HeaderStubIdentityProvider",
     "IdentityProvider",
     "Principal",

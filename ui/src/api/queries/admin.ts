@@ -7,6 +7,13 @@ export interface Connection {
   status: string;
   secretRef: string;
   hasWebhookSecret: boolean;
+  // Derived from the adapter registry (ADR-0021), never stored — whether this erp_type
+  // has working delivery code, not just a connection row.
+  hasAdapter: boolean;
+  // ADR-0022: NEEDS_MAPPING | MAPPING_IN_PROGRESS | AWAITING_ADAPTER | ADAPTER_READY — what
+  // hasAdapter alone can't say, e.g. whether a mapping has already been approved and is
+  // just waiting on adapter code to land.
+  mappingStatus: string;
 }
 
 export interface Binding {
@@ -30,6 +37,11 @@ export interface Subsidiary {
   name: string;
   country: string;
   language: string;
+}
+
+export interface Reseller {
+  tenantId: string;
+  name: string;
 }
 
 export interface OperatorOrderLine {
@@ -64,7 +76,7 @@ export interface OperatorOrder {
 
 export const CONNECTIONS_QUERY = /* GraphQL */ `
   query Connections {
-    connections { connectionId erpType instanceLabel baseUrl credentials status secretRef hasWebhookSecret }
+    connections { connectionId erpType instanceLabel baseUrl credentials status secretRef hasWebhookSecret hasAdapter mappingStatus }
   }
 `;
 
@@ -77,6 +89,12 @@ export const BINDINGS_QUERY = /* GraphQL */ `
 export const SUBSIDIARIES_QUERY = /* GraphQL */ `
   query Subsidiaries {
     subsidiaries { subsidiaryId name country language }
+  }
+`;
+
+export const RESELLERS_QUERY = /* GraphQL */ `
+  query Resellers {
+    resellers { tenantId name }
   }
 `;
 
@@ -120,7 +138,7 @@ export const REGISTER_CONNECTION_MUTATION = /* GraphQL */ `
     $instanceLabel: String!
     $baseUrl: String!
     $credentials: JSON!
-    $secretRef: String!
+    $auth: AuthConfigInput!
     $webhookSecretRef: String
   ) {
     registerConnection(
@@ -128,17 +146,19 @@ export const REGISTER_CONNECTION_MUTATION = /* GraphQL */ `
       instanceLabel: $instanceLabel
       baseUrl: $baseUrl
       credentials: $credentials
-      secretRef: $secretRef
+      auth: $auth
       webhookSecretRef: $webhookSecretRef
     ) {
       connectionId
+      hasAdapter
+      mappingStatus
     }
   }
 `;
 
 export const CREATE_BINDING_MUTATION = /* GraphQL */ `
-  mutation CreateBinding($tenantId: String!, $connectionId: String!, $erpCustomerId: String!) {
-    createBinding(tenantId: $tenantId, connectionId: $connectionId, erpCustomerId: $erpCustomerId) {
+  mutation CreateBinding($tenantId: String!, $connectionId: String!, $erpCustomerId: String!, $name: String!) {
+    createBinding(tenantId: $tenantId, connectionId: $connectionId, erpCustomerId: $erpCustomerId, name: $name) {
       bindingId
     }
   }
@@ -147,6 +167,12 @@ export const CREATE_BINDING_MUTATION = /* GraphQL */ `
 export const VERIFY_BINDING_MUTATION = /* GraphQL */ `
   mutation VerifyBinding($bindingId: String!) {
     verifyBinding(bindingId: $bindingId) { bindingId status }
+  }
+`;
+
+export const RENAME_RESELLER_MUTATION = /* GraphQL */ `
+  mutation RenameReseller($tenantId: String!, $name: String!) {
+    renameReseller(tenantId: $tenantId, name: $name) { tenantId name }
   }
 `;
 
@@ -167,6 +193,15 @@ export const PAUSE_CONNECTION_MUTATION = /* GraphQL */ `
 export const RESUME_CONNECTION_MUTATION = /* GraphQL */ `
   mutation ResumeConnection($connectionId: String!) {
     resumeConnection(connectionId: $connectionId) { connectionId status }
+  }
+`;
+
+// Reachability + auth check against an existing connection's stored base URL/credentials
+// (ADR-0021). Unlike probeErpSamples it works for any connection, adapter or not — it's a
+// plain "can we reach it", not part of the mapping-onboarding flow.
+export const TEST_ERP_ENDPOINT_MUTATION = /* GraphQL */ `
+  mutation TestErpEndpoint($connectionId: String!, $path: String!) {
+    testErpEndpoint(connectionId: $connectionId, path: $path) { label text error }
   }
 `;
 

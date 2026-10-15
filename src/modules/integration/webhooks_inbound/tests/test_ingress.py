@@ -61,6 +61,26 @@ def _webhook(
     )
 
 
+def test_refresh_pulls_shipments_once_the_order_is_known() -> None:
+    locator = InMemoryOrderLocator()
+    locator.record(_CONN, "S001", OrderId("ord_1"))
+    seen: list[tuple[str, str, str]] = []
+
+    def refresh(connection_id: ConnectionId, erp_order_id: str, order_id: str) -> None:
+        seen.append((str(connection_id), erp_order_id, order_id))
+
+    service = InboundWebhookService(
+        secrets=FakeSecrets(),
+        dedup=InMemoryDedupStore(),
+        inbox=InMemoryEventInbox(),
+        locator=locator,
+        order_status=RecordingStatus(),
+        refresh=refresh,
+    )
+    assert service.handle(_webhook()) is IngressOutcome.ACCEPTED
+    assert seen == [("conn_1", "S001", "ord_1")]
+
+
 def test_accepted_applies_status() -> None:
     locator = InMemoryOrderLocator()
     locator.record(_CONN, "S001", OrderId("ord_1"))

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ..domain.models import Reseller
+
 if TYPE_CHECKING:
     from src.shared.types import BindingId, ConnectionId, TenantId
 
@@ -49,3 +51,17 @@ class InMemoryBindingRepository:
 
     def list_all(self) -> list[TenantConnectionBinding]:
         return list(self._by_id.values())
+
+
+class InMemoryResellerRepository:
+    def __init__(self) -> None:
+        self._by_tenant: dict[TenantId, Reseller] = {}
+
+    def upsert(self, tenant_id: TenantId, name: str) -> None:
+        self._by_tenant[tenant_id] = Reseller(tenant_id=tenant_id, name=name)
+
+    def get(self, tenant_id: TenantId) -> Reseller | None:
+        return self._by_tenant.get(tenant_id)
+
+    def list_all(self) -> list[Reseller]:
+        return list(self._by_tenant.values())

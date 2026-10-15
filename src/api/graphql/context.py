@@ -1,6 +1,7 @@
 """GraphQL request context: the wired container + the authenticated tenant/roles.
 
-`tenant_id`/`roles` come from the validated Cognito JWT in production (see api/app.py).
+`tenant_id`/`roles` come from the validated JWT (Cognito or Entra, per `CLOUD_PROVIDER` —
+ADR-0023) in production (see api/app.py).
 Resolvers read the container from here; they never import infrastructure directly.
 """
 

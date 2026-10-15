@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { PageHeader } from "../../components/PageHeader";
-import { useOperatorOrder } from "../../hooks/useAdmin";
+import { useOperatorOrder, useResellers } from "../../hooks/useAdmin";
 import { useOrderEvents } from "../../hooks/useEvents";
 import type { OrderEvent } from "../../api/queries/events";
 
@@ -17,8 +17,10 @@ function formatTime(iso: string): string {
 export function OrderEventsPage() {
   const { orderId = "" } = useParams();
   const { data: order } = useOperatorOrder(orderId);
+  const { data: resellers } = useResellers();
   const { data: events, isLoading, error } = useOrderEvents(orderId);
   const [selected, setSelected] = useState<OrderEvent | null>(null);
+  const resellerName = order ? (resellers ?? []).find((r) => r.tenantId === order.tenantId)?.name ?? order.tenantId : "";
 
   const active = selected ?? (events && events.length > 0 ? events[events.length - 1] : null);
 
@@ -34,7 +36,7 @@ export function OrderEventsPage() {
         subtitle={
           <>
             Every event recorded for this order, in the order it happened.
-            {order && <> Reseller {order.tenantId}, currently {order.status}.</>}
+            {order && <> Reseller {resellerName}, currently {order.status}.</>}
           </>
         }
       />

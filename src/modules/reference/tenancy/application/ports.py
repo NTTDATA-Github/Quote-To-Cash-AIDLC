@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from src.shared.types import BindingId, ConnectionId, TenantId
 
-    from ..domain.models import TenantConnectionBinding
+    from ..domain.models import Reseller, TenantConnectionBinding
 
 
 class BindingRepository(Protocol):
@@ -21,3 +21,9 @@ class BindingRepository(Protocol):
     def find_by_connection_and_customer(
         self, connection_id: ConnectionId, erp_customer_id: str
     ) -> TenantConnectionBinding | None: ...
+
+
+class ResellerRepository(Protocol):
+    def upsert(self, tenant_id: TenantId, name: str) -> None: ...
+    def get(self, tenant_id: TenantId) -> Reseller | None: ...
+    def list_all(self) -> list[Reseller]: ...

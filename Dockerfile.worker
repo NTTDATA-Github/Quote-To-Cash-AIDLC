@@ -10,11 +10,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# ca-certificates provides update-ca-certificates, used below only when a
+# corporate_ca secret is supplied.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY migrations ./migrations
 COPY alembic.ini ./
-RUN pip install .
+# --mount=type=secret is a no-op unless the build passes
+# --secret id=corporate_ca,src=<path>: BuildKit then mounts an EMPTY file at that path,
+# so this is always safe in CI. It exists only to let a build behind a TLS-intercepting
+# corporate proxy (see .gitignore's .build-ca/) trust that proxy's root CA before
+# reaching PyPI — never required, never baked into the image.
+RUN --mount=type=secret,id=corporate_ca,target=/usr/local/share/ca-certificates/corporate-ca.crt \
+    if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then \
+      update-ca-certificates && export PIP_CERT=/etc/ssl/certs/ca-certificates.crt; \
+    fi && \
+    pip install .
 
 RUN useradd --create-home --uid 10001 appuser
 USER appuser

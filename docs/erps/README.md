@@ -19,7 +19,7 @@ Generic steps that are the same for every ERP stay outside this folder:
 | ERP | Status | Folder |
 |---|---|---|
 | Odoo | Live | [odoo/](./odoo/supply-chain-check.md) |
-| NetSuite | Not registered | — |
+| NetSuite | Registered (verified against the in-process mock; polling-only) | [netsuite/](./netsuite/supply-chain-check.md) |
 | SAP | Not registered | — |
 
 ## Adding an ERP's folder

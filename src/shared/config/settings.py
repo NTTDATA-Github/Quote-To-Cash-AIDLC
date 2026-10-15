@@ -27,13 +27,30 @@ _ALL_WORKER_ROLES = frozenset(
 class Settings:
     profile: str  # "memory" (local dev/tests, no infra) | "postgres" (Postgres + SNS/SQS)
     database_url: str
+    # Which cloud the "postgres" profile's secrets/messaging/identity/LLM adapters come
+    # from (ADR-0023). Ignored by the "memory" profile, which uses none of them.
+    cloud_provider: str  # "aws" | "azure"
     aws_endpoint_url: str | None
     aws_region: str
     domain_topic_arn: str
+    azure_key_vault_uri: str | None
+    azure_servicebus_namespace: str | None  # fully-qualified, e.g. "<ns>.servicebus.windows.net"
+    azure_servicebus_topic: str
+    # The client id of THIS process's own user-assigned managed identity (api/worker each
+    # have their own — infra/azure/modules/iam). None = fall back to DefaultAzureCredential
+    # (local `az login`, or the only identity on the host).
+    azure_managed_identity_client_id: str | None
+    entra_tenant_id: str | None
+    entra_client_id: str | None
+    # Name of the Entra claim carrying the per-user tenant id — portal/user-flow
+    # configured, not yet something Terraform can pin (see ADR-0023).
+    entra_tenant_claim_name: str
     # "real" (dispatch via the adapter registry) | "stub" (force StubErpAdapter for every ERP type)
     erp_adapter_mode: str
     # OdooAdapter-specific; a new ERP adapter gets its own timeout setting if it needs one
     erp_odoo_timeout_seconds: float
+    # NetSuiteAdapter-specific — its own timeout, deliberately not shared with Odoo's
+    erp_netsuite_timeout_seconds: float
     log_level: str
     reconcile_interval_seconds: int
     worker_roles: frozenset[str]  # which of {order-processing, order-delivery,
@@ -50,7 +67,14 @@ class Settings:
     # the Bedrock model the `mapping` worker calls, and the base URL of the separate
     # erp-agent-service the "approve & implement" action hands an approved mapping to.
     mapping_bedrock_model_id: str
+    # Used instead of mapping_bedrock_model_id when cloud_provider="azure" (ADR-0023) —
+    # a direct Anthropic model id, not a Bedrock inference-profile id.
+    mapping_anthropic_model: str
     agent_service_url: str
+    # Local-dev-only escape hatch for GenericErpProbe's SSRF guard (ADR-0021) — the ERP
+    # being tested (local Odoo, the NetSuite mock) is deliberately on localhost, which the
+    # guard correctly refuses in a real deployment. Never set this in staging/production.
+    erp_probe_allow_private_addresses: bool
 
 
 def _parse_worker_roles(raw: str) -> frozenset[str]:
@@ -72,13 +96,22 @@ def get_settings() -> Settings:
         database_url=os.environ.get(
             "DATABASE_URL", "postgresql+psycopg2://portal:portal@localhost:5432/portal"
         ),
+        cloud_provider=os.environ.get("CLOUD_PROVIDER", "aws"),
         aws_endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),  # http://localhost:4566 for floci
         aws_region=os.environ.get("AWS_REGION", "us-east-1"),
         domain_topic_arn=os.environ.get(
             "DOMAIN_TOPIC_ARN", "arn:aws:sns:us-east-1:000000000000:platform-domain-events.fifo"
         ),
+        azure_key_vault_uri=os.environ.get("AZURE_KEY_VAULT_URI"),
+        azure_servicebus_namespace=os.environ.get("AZURE_SERVICEBUS_NAMESPACE"),
+        azure_servicebus_topic=os.environ.get("AZURE_SERVICEBUS_TOPIC", "platform-domain-events"),
+        azure_managed_identity_client_id=os.environ.get("AZURE_MANAGED_IDENTITY_CLIENT_ID"),
+        entra_tenant_id=os.environ.get("ENTRA_TENANT_ID"),
+        entra_client_id=os.environ.get("ENTRA_CLIENT_ID"),
+        entra_tenant_claim_name=os.environ.get("ENTRA_TENANT_CLAIM_NAME", "extension_tenant_id"),
         erp_adapter_mode=os.environ.get("ERP_ADAPTER_MODE", "real"),
         erp_odoo_timeout_seconds=float(os.environ.get("ERP_ODOO_TIMEOUT_SECONDS", "10")),
+        erp_netsuite_timeout_seconds=float(os.environ.get("ERP_NETSUITE_TIMEOUT_SECONDS", "10")),
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         reconcile_interval_seconds=int(os.environ.get("RECONCILE_INTERVAL_SECONDS", "900")),
         worker_roles=_parse_worker_roles(os.environ.get("WORKER_ROLE", "all")),
@@ -95,5 +128,12 @@ def get_settings() -> Settings:
         mapping_bedrock_model_id=os.environ.get(
             "MAPPING_BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"
         ),
+        mapping_anthropic_model=os.environ.get(
+            "MAPPING_ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"
+        ),
         agent_service_url=os.environ.get("AGENT_SERVICE_URL", "http://localhost:8002"),
+        erp_probe_allow_private_addresses=os.environ.get(
+            "ERP_PROBE_ALLOW_PRIVATE_ADDRESSES", "false"
+        ).lower()
+        == "true",
     )

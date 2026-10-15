@@ -38,10 +38,36 @@ def _map_odoo(fields: dict[str, str]) -> CanonicalStatus | None:
     return None
 
 
+def _map_netsuite(fields: dict[str, str]) -> CanonicalStatus | None:
+    """NetSuite sales order status. Reads the human `status` refName first (what the REST
+    salesOrder `status.refName` carries, e.g. "Pending Fulfillment"), falling back to the
+    coded `order_status` enum. Inputs are already lowercased/stripped by `map_native_status`.
+
+    "Pending Approval" is deliberately no-transition: the order exists but isn't confirmed
+    yet. "Billed"/"Fully Billed"/"Closed" are CLOSED; a cancelled order is CANCELLED;
+    every in-flight fulfilling/billing state is CONFIRMED (delivery itself is tracked as a
+    Fulfillment fact via `fetch_shipments`, not this status — FR-A6, same as Odoo)."""
+    status = fields.get("status", "")
+    order_status = fields.get("order_status", "")
+    if status in ("cancelled", "canceled") or order_status in ("c", "cancelled", "canceled"):
+        return CanonicalStatus.CANCELLED
+    if status in ("billed", "fully billed", "closed"):
+        return CanonicalStatus.CLOSED
+    if status in (
+        "pending fulfillment",
+        "partially fulfilled",
+        "pending billing",
+        "pending billing/partially fulfilled",
+    ):
+        return CanonicalStatus.CONFIRMED
+    return None
+
+
 # The one place a new ERP's status mapping is registered. Keyed by the same string an
 # `ErpConnection.erp_type`/`ErpTarget.erp_type` carries (upper-cased).
 STATUS_MAPPERS: dict[str, StatusMapper] = {
     "ODOO": _map_odoo,
+    "NETSUITE": _map_netsuite,
 }
 
 

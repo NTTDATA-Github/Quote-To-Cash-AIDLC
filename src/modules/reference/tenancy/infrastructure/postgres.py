@@ -12,12 +12,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Column, MetaData, String, Table, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
 from src.shared.types import BindingId, ConnectionId, TenantId
 
 from ..domain.errors import BindingConflict
-from ..domain.models import BindingStatus, TenantConnectionBinding
+from ..domain.models import BindingStatus, Reseller, TenantConnectionBinding
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Row
@@ -33,6 +34,13 @@ tenant_connection_bindings_table = Table(
     Column("connection_id", String, nullable=False),
     Column("erp_customer_id", String, nullable=False),
     Column("status", String, nullable=False),
+)
+
+resellers_table = Table(
+    "resellers",
+    _metadata,
+    Column("tenant_id", String, primary_key=True),
+    Column("name", String, nullable=False),
 )
 
 
@@ -141,3 +149,41 @@ class PostgresBindingRepository:
         finally:
             session.close()
         return [_to_model(row) for row in rows]
+
+
+class PostgresResellerRepository:
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        self._session_factory = session_factory
+
+    def upsert(self, tenant_id: TenantId, name: str) -> None:
+        session = self._session_factory()
+        try:
+            stmt = pg_insert(resellers_table).values(tenant_id=str(tenant_id), name=name)
+            stmt = stmt.on_conflict_do_update(index_elements=["tenant_id"], set_={"name": name})
+            session.execute(stmt)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    def get(self, tenant_id: TenantId) -> Reseller | None:
+        session = self._session_factory()
+        try:
+            row = session.execute(
+                select(resellers_table).where(resellers_table.c.tenant_id == str(tenant_id))
+            ).first()
+        finally:
+            session.close()
+        if row is None:
+            return None
+        return Reseller(tenant_id=TenantId(row.tenant_id), name=row.name)
+
+    def list_all(self) -> list[Reseller]:
+        session = self._session_factory()
+        try:
+            rows = session.execute(select(resellers_table)).all()
+        finally:
+            session.close()
+        return [Reseller(tenant_id=TenantId(row.tenant_id), name=row.name) for row in rows]

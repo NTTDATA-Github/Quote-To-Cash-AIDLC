@@ -5,6 +5,7 @@ one injected by the composition root."""
 
 from __future__ import annotations
 
+from .anthropic import AnthropicLlmClient
 from .bedrock import BedrockLlmClient
 
-__all__ = ["BedrockLlmClient"]
+__all__ = ["AnthropicLlmClient", "BedrockLlmClient"]

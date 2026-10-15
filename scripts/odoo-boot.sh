@@ -25,7 +25,7 @@ row = cur.fetchone()
 sys.exit(0 if row and row[0] == "installed" else 10)
 PY
 if [[ "$code" -eq 10 ]]; then
-  /entrypoint.sh odoo -d odoo -i base,contacts,sale_management,stock,sale_stock --stop-after-init
+  /entrypoint.sh odoo -d odoo -i base,contacts,sale_management,stock,sale_stock --without-demo=all --stop-after-init
 elif [[ "$code" -ne 0 ]]; then
   exit "$code"
 fi

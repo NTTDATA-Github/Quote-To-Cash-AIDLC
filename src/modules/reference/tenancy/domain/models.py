@@ -32,3 +32,14 @@ class TenantConnectionBinding:
     @property
     def is_verified(self) -> bool:
         return self.status is BindingStatus.VERIFIED
+
+
+@dataclass
+class Reseller:
+    """Display name for a tenant_id (business-facing). `tenant_id` stays the stable,
+    opaque partition key used everywhere else (RLS, Cognito's `custom:tenant_id`, webhook
+    URLs) — this is purely the human-readable label the UI shows instead, the same role
+    `Subsidiary.name` plays for the operator's own side."""
+
+    tenant_id: TenantId
+    name: str

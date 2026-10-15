@@ -115,9 +115,10 @@ they pick up the current env, and it waits until `GET /livez` answers. Logs are
 a few minutes. `down` does not delete Docker volumes.
 
 Sign in to AdminOps as `demo-operator` / `DemoPass123!`. That login sees every order and
-every notification sent to a reseller. Odoo is `admin` / `admin`. The seeded quote is
-`qte_demo` for tenant `tnt_demo`, SKU `DEMO-BOX`. Set that Internal Reference on a product
-in Odoo before a live submit will find it.
+every notification sent to a reseller. Odoo is `admin` / `admin`. `scripts/seed_demo.py`
+seeds Odoo itself with a real-looking reseller ("Acme Retail"), a small industrial-
+distributor product catalog, and one confirmed order (PO reference `PO-48213`) for
+tenant `tnt_demo` — no manual Odoo setup needed.
 
 Odoo may show a sticky banner, "Registration failed - push service not available". That is
 the browser refusing desktop notifications on this local site. Dismiss it. It does not
@@ -139,6 +140,8 @@ block sales.
 | Floci console | http://localhost:4566/_floci/ui |
 | Adapter agent | http://127.0.0.1:8002/livez |
 | Reseller mock | http://127.0.0.1:8090/hooks |
+| NetSuite (SuiteTalk REST) | http://127.0.0.1:8075 |
+| NetSuite triggers (Swagger) | http://127.0.0.1:8075/docs |
 | App Postgres | `localhost:5432`, database `portal`, user `portal`, password `portal` |
 
 AdminOps calls Floci Cognito through the Vite proxy at `/cognito-idp` (Floci does not
@@ -148,9 +151,10 @@ ids. Do not copy `ui/.env.example` over that file after `up`.
 The same steps by hand, including a machine-to-machine token, are in `docs/local-setup.md`.
 `npm run build` in `ui/` produces the static `dist/` folder that gets deployed as-is.
 
-`up` starts the reseller mock on http://127.0.0.1:8090/hooks, the stand-in for a reseller's
-server. Deliveries are logged in `.local/reseller-mock.log`. Set `WEBHOOK_RECEIVER_SECRET`
-to the endpoint's signing secret when you want those signatures checked.
+`up` registers one webhook endpoint for `tnt_demo` (`whep_local_demo`) pointed at the
+reseller mock on http://127.0.0.1:8090/hooks and starts that mock with signing secret
+`whsec_local_dev`. Running `up` again updates that same endpoint. Deliveries are logged
+in `.local/reseller-mock.log`.
 
 ## Adding a new ERP
 `docs/adding-an-erp.md` — four touch points (a status mapper, an adapter, one registry

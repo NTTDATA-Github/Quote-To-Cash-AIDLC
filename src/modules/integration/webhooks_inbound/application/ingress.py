@@ -11,6 +11,8 @@ from src.modules.integration.erp.domain.status_mapping import map_native_status
 from ..domain.signature import verify_shared_secret, verify_signature
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from src.shared.types import ConnectionId
 
     from .ports import DedupStore, EventInbox, OrderLocator, OrderStatusPort, SecretResolver
@@ -53,12 +55,16 @@ class InboundWebhookService:
         inbox: EventInbox,
         locator: OrderLocator,
         order_status: OrderStatusPort,
+        refresh: Callable[[ConnectionId, str, str], None] | None = None,
     ) -> None:
         self._secrets = secrets
         self._dedup = dedup
         self._inbox = inbox
         self._locator = locator
         self._order_status = order_status
+        # After the order is known: pull shipments and invoices. A NetSuite ping
+        # carries an id, not the fulfillment lines. None in tests that only check status.
+        self._refresh = refresh
 
     def handle(self, webhook: InboundWebhook) -> IngressOutcome:
         # 1. authenticate
@@ -89,9 +95,11 @@ class InboundWebhookService:
 
         # 4. map + apply (only now do we mark the delivery processed)
         status = map_native_status(webhook.erp_type, webhook.native_fields)
+        if status is not None:
+            self._order_status.apply_status(order_id, status)
+        if self._refresh is not None:
+            self._refresh(webhook.connection_id, webhook.erp_order_id, str(order_id))
         self._dedup.mark(dedup_key)
         if status is None:
             return IngressOutcome.NO_TRANSITION
-
-        self._order_status.apply_status(order_id, status)
         return IngressOutcome.ACCEPTED

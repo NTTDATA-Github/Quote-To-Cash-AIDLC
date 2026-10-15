@@ -10,7 +10,7 @@ import { InfoTag } from "../../components/InfoTag";
 import { KanbanBoard } from "../../components/KanbanBoard";
 import { OrderDetailBody } from "../../components/OrderDetailBody";
 import { PageHeader } from "../../components/PageHeader";
-import { useOperatorOrders, useSubsidiaries } from "../../hooks/useAdmin";
+import { useConnections, useOperatorOrders, useResellers, useSubsidiaries } from "../../hooks/useAdmin";
 import type { OperatorOrder } from "../../api/queries/admin";
 import { statusLabel } from "../../lib/statusLabel";
 import { orderStage, stageLabel, statusRank, type Stage } from "../../lib/orderStage";
@@ -31,6 +31,8 @@ type View = "kanban" | "table";
 export function OrdersPage() {
   const { data: orders, isLoading, error } = useOperatorOrders();
   const { data: subsidiaries } = useSubsidiaries();
+  const { data: resellers } = useResellers();
+  const { data: connections } = useConnections();
   const [search, setSearch] = useState("");
   const [params, setParams] = useSearchParams();
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
@@ -38,11 +40,17 @@ export function OrdersPage() {
   const stage: Stage | "all" = STAGE_FILTERS.includes(stageParam as Stage) ? (stageParam as Stage) : "all";
   const view: View = params.get("view") === "table" ? "table" : "kanban";
   const nameById = new Map((subsidiaries ?? []).map((s) => [s.subsidiaryId, s.name]));
+  const resellerNameById = new Map((resellers ?? []).map((r) => [r.tenantId, r.name]));
+  const connectionLabelById = new Map((connections ?? []).map((c) => [c.connectionId, c.instanceLabel]));
 
   function subsidiaryName(order: OperatorOrder): string {
     const id = order.parties.subsidiaryId;
     if (!id) return "";
     return nameById.get(id) ?? id;
+  }
+
+  function resellerName(order: OperatorOrder): string {
+    return resellerNameById.get(order.tenantId) ?? order.tenantId;
   }
 
   function setStage(next: Stage | "all") {
@@ -61,7 +69,9 @@ export function OrdersPage() {
 
   const filtered = (orders ?? []).filter((o) => {
     if (stage !== "all" && orderStage(o.status) !== stage) return false;
-    const haystack = [o.orderId, o.tenantId, o.clientReference, subsidiaryName(o)].join(" ").toLowerCase();
+    const haystack = [o.orderId, o.tenantId, resellerName(o), o.clientReference, subsidiaryName(o)]
+      .join(" ")
+      .toLowerCase();
     return haystack.includes(search.toLowerCase());
   });
 
@@ -80,10 +90,15 @@ export function OrdersPage() {
       ),
       sortValue: (o) => o.orderId,
     },
-    { key: "tenant", header: "Reseller", render: (o) => <span className="id">{o.tenantId}</span>, sortValue: (o) => o.tenantId },
+    { key: "tenant", header: "Reseller", render: (o) => resellerName(o), sortValue: (o) => resellerName(o) },
     { key: "ref", header: "Reference", render: (o) => o.clientReference, sortValue: (o) => o.clientReference },
     { key: "subsidiary", header: "Subsidiary", render: (o) => subsidiaryName(o) || "—", sortValue: (o) => subsidiaryName(o) },
-    { key: "connection", header: "Connection", render: (o) => o.owningConnectionId ?? "—", sortValue: (o) => o.owningConnectionId },
+    {
+      key: "connection",
+      header: "Connection",
+      render: (o) => (o.owningConnectionId ? connectionLabelById.get(o.owningConnectionId) ?? o.owningConnectionId : "—"),
+      sortValue: (o) => (o.owningConnectionId ? connectionLabelById.get(o.owningConnectionId) ?? o.owningConnectionId : ""),
+    },
     {
       key: "erpOrderId",
       header: "ERP order",
@@ -150,7 +165,7 @@ export function OrdersPage() {
       </div>
       {error && <div className="callout callout--danger">Could not load orders: {error.message}</div>}
       {view === "kanban" ? (
-        <KanbanBoard orders={filtered} subsidiaryName={subsidiaryName} onCardClick={(o) => setOpenOrderId(o.orderId)} />
+        <KanbanBoard orders={filtered} resellerName={resellerName} subsidiaryName={subsidiaryName} onCardClick={(o) => setOpenOrderId(o.orderId)} />
       ) : (
         <DataTable
           columns={columns}

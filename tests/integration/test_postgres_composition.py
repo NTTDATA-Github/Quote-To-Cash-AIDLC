@@ -22,7 +22,7 @@ pytest.importorskip("sqlalchemy")
 from sqlalchemy import text  # noqa: E402
 from src.composition import build_container  # noqa: E402
 from src.modules.integration.erp.application.ports import ErpPartnerOrderLine  # noqa: E402
-from src.modules.reference.connections.domain.models import ErpConnection, ErpType  # noqa: E402
+from src.modules.reference.connections.domain.models import ErpConnection  # noqa: E402
 from src.modules.reference.tenancy.domain.models import (  # noqa: E402
     BindingStatus,
     TenantConnectionBinding,
@@ -56,6 +56,7 @@ def _postgres_settings() -> Settings:
         domain_topic_arn=base.domain_topic_arn,
         erp_adapter_mode="stub",
         erp_odoo_timeout_seconds=base.erp_odoo_timeout_seconds,
+        erp_netsuite_timeout_seconds=base.erp_netsuite_timeout_seconds,
         log_level=base.log_level,
         reconcile_interval_seconds=base.reconcile_interval_seconds,
         worker_roles=base.worker_roles,
@@ -63,6 +64,9 @@ def _postgres_settings() -> Settings:
         cognito_client_id=base.cognito_client_id,
         cognito_resource_server_id=base.cognito_resource_server_id,
         cors_allowed_origins=base.cors_allowed_origins,
+        mapping_bedrock_model_id=base.mapping_bedrock_model_id,
+        agent_service_url=base.agent_service_url,
+        erp_probe_allow_private_addresses=base.erp_probe_allow_private_addresses,
     )
 
 
@@ -76,7 +80,7 @@ def test_postgres_profile_places_and_routes_an_order() -> None:
     container.connections.add(
         ErpConnection(
             connection_id=connection,
-            erp_type=ErpType.ODOO,
+            erp_type="ODOO",
             instance_label="Test Odoo",
             base_url="http://odoo:8069",
             credentials={"database": "odoo", "username": "admin"},

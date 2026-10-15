@@ -1,0 +1,19 @@
+# Mock NetSuite + mock reseller webhook receiver — dev/test aids (scripts/mock_netsuite.py,
+# scripts/dev_webhook_receiver.py), deployed here only because Azure staging needs a
+# reachable URL for them (unlike local dev, where `scripts/local.sh` just runs them as
+# local processes). Both are stdlib-only by design — no `pip install` needed, no `src/`
+# dependency — so this image is just the interpreter + the two scripts. CMD is overridden
+# per Container App (infra/azure/modules/mocks) to pick which one runs.
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY scripts/mock_netsuite.py scripts/dev_webhook_receiver.py ./scripts/
+RUN useradd --create-home --uid 10001 appuser
+USER appuser
+
+# No CMD here — each Container App's `command` picks mock_netsuite or
+# dev_webhook_receiver (see infra/azure/modules/mocks/main.tf).

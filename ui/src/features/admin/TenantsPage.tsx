@@ -6,7 +6,7 @@ import { FilterMenu } from "../../components/FilterMenu";
 import { InfoTag } from "../../components/InfoTag";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
-import { useBindings, useConnections, useCreateBinding, useRemoveBinding, useVerifyBinding } from "../../hooks/useAdmin";
+import { useBindings, useConnections, useCreateBinding, useRemoveBinding, useResellers, useVerifyBinding } from "../../hooks/useAdmin";
 import type { Binding } from "../../api/queries/admin";
 import { statusLabel } from "../../lib/statusLabel";
 
@@ -16,20 +16,31 @@ const STATUS_OPTIONS = STATUS_FILTERS.map((s) => ({ value: s, label: s === "all"
 export function TenantsPage() {
   const { data: bindings, isLoading, error } = useBindings();
   const { data: connections } = useConnections();
+  const { data: resellers } = useResellers();
   const createBinding = useCreateBinding();
   const verifyBinding = useVerifyBinding();
   const removeBinding = useRemoveBinding();
-  const [form, setForm] = useState({ tenantId: "", connectionId: "", erpCustomerId: "" });
+  const [form, setForm] = useState({ tenantId: "", connectionId: "", erpCustomerId: "", name: "" });
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]>("all");
 
+  const resellerNameById = new Map((resellers ?? []).map((r) => [r.tenantId, r.name]));
+
   const rows = (bindings ?? [])
     .filter((b) => status === "all" || b.status === status)
-    .filter((b) => [b.tenantId, b.connectionId, b.erpCustomerId].join(" ").toLowerCase().includes(search.toLowerCase()));
+    .filter((b) =>
+      [b.tenantId, resellerNameById.get(b.tenantId) ?? "", b.connectionId, b.erpCustomerId].join(" ").toLowerCase().includes(search.toLowerCase()),
+    );
 
   const columns: Column<Binding>[] = [
-    { key: "tenant", header: "Reseller ID", render: (b) => <span className="id">{b.tenantId}</span>, sortValue: (b) => b.tenantId },
+    {
+      key: "tenant",
+      header: "Reseller",
+      render: (b) => resellerNameById.get(b.tenantId) ?? b.tenantId,
+      sortValue: (b) => resellerNameById.get(b.tenantId) ?? b.tenantId,
+    },
+    { key: "tenantId", header: "Reseller ID", render: (b) => <span className="id">{b.tenantId}</span>, sortValue: (b) => b.tenantId },
     { key: "connection", header: "Connection", render: (b) => b.connectionId, sortValue: (b) => b.connectionId },
     { key: "customer", header: "ERP customer ID", render: (b) => <span className="mono">{b.erpCustomerId}</span>, sortValue: (b) => b.erpCustomerId },
     { key: "status", header: "Status", render: (b) => <StatusBadge status={statusLabel(b.status)} />, sortValue: (b) => b.status },
@@ -55,7 +66,7 @@ export function TenantsPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     await createBinding.mutateAsync(form);
-    setForm({ tenantId: "", connectionId: "", erpCustomerId: "" });
+    setForm({ tenantId: "", connectionId: "", erpCustomerId: "", name: "" });
     setShowForm(false);
   }
 
@@ -74,7 +85,13 @@ export function TenantsPage() {
         <form className="panel stack" onSubmit={handleSubmit}>
           <div className="grid2">
             <div className="field">
-              <label htmlFor="tenantId">Reseller ID</label>
+              <label htmlFor="name">Reseller name</label>
+              <input className="input" id="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            </div>
+            <div className="field">
+              <label htmlFor="tenantId">
+                Reseller ID <InfoTag text="The stable internal id for this reseller — never shown as the primary label, only the name is." />
+              </label>
               <input className="input" id="tenantId" value={form.tenantId} onChange={(e) => setForm({ ...form, tenantId: e.target.value })} required />
             </div>
             <div className="field">

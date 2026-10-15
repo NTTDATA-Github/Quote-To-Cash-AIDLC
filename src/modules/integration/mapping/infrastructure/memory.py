@@ -14,6 +14,7 @@ from src.shared.types import generate_id
 
 from ..domain.models import AdapterRunResult, MappingEntry, MappingStatus
 from ..domain.proposal import valid_field_names
+from ..domain.request_suggestion import SuggestedSampleRequest
 
 if TYPE_CHECKING:
     from ..domain.models import CanonicalSchema, MappingJob
@@ -102,6 +103,28 @@ def _header_fields(sample_text: str) -> list[str]:
         return []
     lines = sample_text.splitlines()
     return lines[0].split(",") if lines else []
+
+
+_RECORD_KEYWORDS = ["order", "customer", "product", "invoice", "shipment", "delivery"]
+
+
+class StubSampleRequestSuggester:
+    """Deterministic, offline stand-in for the LLM. Scans the canonical fields for a few
+    common record-kind keywords and guesses a generic REST path for each one found
+    (always including "orders" — every canonical schema here is order-centric). The
+    real suggester is Bedrock-backed and actually knows the ERP's real API shape."""
+
+    def suggest(
+        self, erp_type: str, instance_label: str, base_url: str, canonical_fields_csv: str
+    ) -> list[SuggestedSampleRequest]:
+        text = canonical_fields_csv.lower()
+        kinds = [k for k in _RECORD_KEYWORDS if k in text]
+        if "order" not in kinds:
+            kinds.insert(0, "order")
+        return [
+            SuggestedSampleRequest(label=f"{kind}s", method="GET", path=f"/{kind}s?limit=5")
+            for kind in kinds[:5]
+        ]
 
 
 class StubAdapterRunLauncher:

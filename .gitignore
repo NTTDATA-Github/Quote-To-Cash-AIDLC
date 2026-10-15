@@ -13,6 +13,11 @@ portal_local.db
 *.sqlite3
 *.db
 
+# Corporate TLS-intercepting proxy root CA, exported locally so Docker builds can trust
+# it (see Dockerfile.api/.worker/.odoo) — specific to this network, not portable, never
+# committed.
+.build-ca/
+
 # Environment / secrets
 .env
 *.env
@@ -38,6 +43,7 @@ Thumbs.db
 infra/terraform/bootstrap/terraform.rc
 # Bootstrap's state is local (chicken/egg: it creates the remote-state bucket itself).
 infra/terraform/bootstrap/terraform.tfstate*
+infra/azure/bootstrap/terraform.tfstate*
 
 # Temp
 *.log

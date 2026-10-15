@@ -6,7 +6,7 @@ import os
 
 from src.composition import build_container
 from src.modules.integration.erp.application.ports import ErpPartnerOrderLine
-from src.modules.reference.connections.domain.models import ErpConnection, ErpType
+from src.modules.reference.connections.domain.models import ErpConnection
 from src.modules.reference.tenancy.domain.models import BindingStatus, TenantConnectionBinding
 from src.shared.types import BindingId, ConnectionId, TenantId
 
@@ -19,7 +19,7 @@ def test_container_observes_an_erp_order() -> None:
     container.connections.add(
         ErpConnection(
             connection_id=conn,
-            erp_type=ErpType.ODOO,
+            erp_type="ODOO",
             instance_label="Local Odoo",
             base_url="http://odoo:8069",
             credentials={"database": "odoo", "username": "admin"},

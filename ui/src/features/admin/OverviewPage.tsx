@@ -22,6 +22,7 @@ import {
   useConnections,
   useNotifications,
   useOperatorOrders,
+  useResellers,
   useSubsidiaries,
 } from "../../hooks/useAdmin";
 import type { OperatorOrder } from "../../api/queries/admin";
@@ -77,6 +78,7 @@ export function OverviewPage() {
   const { data: connections = [] } = useConnections();
   const { data: bindings = [] } = useBindings();
   const { data: subsidiaries = [] } = useSubsidiaries();
+  const { data: resellerNames = [] } = useResellers();
   const { data: notifications = [] } = useNotifications();
 
   const labelled = orders.map((o) => ({ order: o, label: statusLabel(o.status), role: statusRole(statusLabel(o.status)), stage: orderStage(o.status) }));
@@ -84,7 +86,9 @@ export function OverviewPage() {
   const completed = labelled.filter((x) => x.stage === "completed").length;
   const attention = labelled.filter((x) => x.stage === "attention");
   const activeConnections = connections.filter((c) => c.status.toUpperCase() === "ACTIVE").length;
-  const resellers = new Set(bindings.map((b) => b.tenantId)).size;
+  const resellerCount = new Set(bindings.map((b) => b.tenantId)).size;
+  const resellerNameById = new Map(resellerNames.map((r) => [r.tenantId, r.name]));
+  const resellerName = (tenantId: string) => resellerNameById.get(tenantId) ?? tenantId;
   const failedNotifications = notifications.filter((n) => statusRole(statusLabel(n.status)) === "danger");
 
   const stageCounts = PIPELINE.map((s) => ({
@@ -108,7 +112,7 @@ export function OverviewPage() {
     .slice(0, 6);
   const recentColumns: Column<OperatorOrder>[] = [
     { key: "orderId", header: "Order", render: (o) => <Link to={`/admin/orders/${o.orderId}`}>{o.orderId}</Link> },
-    { key: "tenant", header: "Reseller", render: (o) => <span className="id">{o.tenantId}</span> },
+    { key: "tenant", header: "Reseller", render: (o) => resellerName(o.tenantId) },
     { key: "status", header: "Status", render: (o) => <StatusBadge status={statusLabel(o.status)} /> },
     { key: "updated", header: "Last activity", render: (o) => (latestEvent(o) ? timeAgo(latestEvent(o)!.occurredAt) : "—") },
   ];
@@ -137,7 +141,7 @@ export function OverviewPage() {
             <Plug size={15} strokeWidth={2} /> <b>{activeConnections}</b> active ERP connections
           </span>
           <span className="hero__fact">
-            <Users size={15} strokeWidth={2} /> <b>{resellers}</b> resellers
+            <Users size={15} strokeWidth={2} /> <b>{resellerCount}</b> resellers
           </span>
           <span className="hero__fact">
             <Building2 size={15} strokeWidth={2} /> <b>{subsidiaries.length}</b> subsidiaries
@@ -228,7 +232,7 @@ export function OverviewPage() {
                         Order <span className="id">{x.order.orderId}</span>
                       </span>
                       <span className="attn__meta">
-                        {x.label} · reseller {x.order.tenantId}
+                        {x.label} · reseller {resellerName(x.order.tenantId)}
                       </span>
                     </span>
                     <StatusBadge status={x.label} />

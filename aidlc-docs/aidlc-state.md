@@ -571,3 +571,145 @@ Both commits landed. `shipment` and `invoicing` are independently extractable: n
   modularized, renamed). Verified to the extent the sandbox allows (tests/lint/fmt green;
   Terraform module graph initializes; full `terraform validate` + a real AWS `apply` + a
   live pipeline run are the remaining steps, documented in `docs/deploy-aws.md`).
+
+---
+
+## Increment 7, continued — UI shipped to AWS, Odoo's own stack, Infrastructure Design brought current
+- **Trigger**: between the last entry and this one, `modules/ui` (S3 + CloudFront) and
+  `modules/odoo` (Odoo's own ECS cluster + Fargate task + ALB + RDS Postgres 15) were
+  added, and `deploy.yml` grew to build/push images, bootstrap the ECR repos, run the
+  Alembic migration as a one-off ECS task, and build+ship the UI after `terraform apply`
+  — all authored directly in chat iteration, same as Increment 4's canonical-model work,
+  ahead of this formal catch-up. User then asked to follow the AI-DLC method and bring
+  the Infrastructure Design stage's artifacts up to date with what's actually built, "how
+  Kiro will update this, it should look very similar" — i.e., re-run Kiro's own
+  Infrastructure Design update process (`.kiro/aws-aidlc-rule-details/construction/
+  infrastructure-design.md`) against the real current `infra/terraform`, not just log a
+  diff.
+- **No new clarifying-question round** — Kiro's Step 3 (context-appropriate questions)
+  governs *original* infrastructure design under ambiguity; here every decision was
+  already made and already running in real Terraform code (same precedent as this
+  increment's own "Infrastructure Design — REUSED" entry above). Went straight to Step 6
+  (regenerate artifacts) against the real `infra/terraform/**` and `.github/workflows/
+  deploy.yml`.
+- [x] **Infrastructure Design artifacts updated** —
+  `construction/target-arch/infrastructure-design/infrastructure-design.md` and
+  `deployment-architecture.md` rewritten to add: the full current module list
+  (`network`/`database`/`registry`/`identity`/`observability`/`iam`/`compute`/`odoo`/
+  `ui`/`messaging`/`secrets`), the one-time account bootstrap
+  (`infra/terraform/bootstrap`, OIDC chicken-and-egg explained), the full `deploy.yml`/
+  `terraform-plan.yml` CI/CD pipeline, Odoo's parallel (not shared) stack, the UI's
+  S3+CloudFront+CloudFront-as-reverse-proxy-for-/graphql design, the `public_access`
+  trade-off and its known gap (Fargate tasks always get a public IP regardless of the
+  flag — no private subnets/NAT exist yet), a cost/sizing review, and a "Resolved
+  decisions" section reconciling 3 since-changed plans against what was actually built
+  (one Cognito pool not two; an in-process reconcile loop not EventBridge Scheduler; the
+  module split itself). Diagrams redrawn to show both ALBs, both Fargate clusters, the
+  CI/CD pipeline, and CloudFront's two origins.
+- [x] **Verified against real AWS, not just read from code** — this session's sandbox
+  runs network-sandboxed by default (the same corporate-TLS-proxy issue noted since
+  Increment 3); disabling that for specific commands, `terraform init` against the real
+  `staging` S3/DynamoDB backend succeeded (the one-time bootstrap had already been done,
+  previously, from this machine — confirmed by its local `bootstrap/terraform.tfstate`),
+  and `terraform plan -var-file=envs/staging.tfvars` came back **clean: 87 to add, 0 to
+  change, 0 to destroy** — nothing deployed yet, zero conflicts with existing state. This
+  is the first time `plan` has been run against the real backend since Increment 7's
+  original "not yet executed" note.
+- **Not done this pass (explicitly deferred, not hidden)**: the real `terraform apply`
+  itself. User asked to see the plan output and a cost/sizing validation first ("Plan
+  first and list the resources... validate if everything is in basic level sku... handle
+  decent requests") — delivered as a chat answer (87 resources listed by module, sizing
+  already at AWS's practical floor throughout, ~$165-170/mo floor estimate, two
+  non-floor items flagged: Odoo's larger hardcoded task size and the two separate ALBs).
+  Apply is still gated on explicit user go-ahead + DB password handling, per the
+  AI-DLC/Kiro infrastructure-design.md rule's own Step 8 ("do not proceed until the user
+  explicitly approves").
+
+## Increment 7, continued — Status
+- **Lifecycle Phase**: CONSTRUCTION — Infrastructure Design stage **COMPLETE (approved
+  2026-10-14)**. Code Generation stage: no new code required — every module/pipeline
+  file the approved design describes already exists on disk from Increment 7's original
+  pass + this continuation. Proceeding directly to executing the already-planned,
+  already-reviewed `terraform apply` against real AWS (the actual next human action per
+  `docs/deploy-aws.md`, now authorized).
+
+
+---
+
+## Increment — NetSuite ERP + faithful mock
+- **Started**: 2026-10-14
+- **Goal**: Add NetSuite as a registered ERP implemented against real SuiteTalk REST Web
+  Services (TBA OAuth 1.0a), plus a faithful in-process SuiteTalk REST mock so the platform
+  runs/tests end-to-end with no live account and goes live by config only (base_url + secret).
+- **Unit**: `U3-netsuite-integration` (mirrors `U3-odoo-integration`; integration module).
+- **Decisions**: D-NS-1 real adapter + faithful mock (not the generic stub); D-NS-2 pack TBA
+  secrets as JSON in the single `secret_ref`, non-secret ids in `credentials` (no schema change).
+
+### 🔵 INCEPTION (resume, brownfield)
+- [x] Workspace Detection — rule details `.kiro/aws-aidlc-rule-details/`; extensions dirs empty,
+  carried forward prior ERP-increment config (Security=No local/PoC, Resiliency=Yes adapter-level,
+  PBT=Partial pure fns).
+- [x] Requirements Analysis — `inception/requirements/netsuite-integration-requirements.md`
+  (adaptive: standard; Functional Design folded, single unit). Approved by user directive.
+
+### 🟢 CONSTRUCTION (single unit)
+- [x] Functional Design (folded) — `construction/U3-netsuite-integration/README.md`.
+- [x] NFR/Resiliency — inherited; adapter-level timeout + terminal/transient classification.
+- [x] Code Generation — plan `construction/plans/netsuite-integration-code-generation-plan.md`
+  (all steps [x]). Real `NetSuiteAdapter` + `_map_netsuite` + ErpType.NETSUITE + registry +
+  `erp_netsuite_timeout_seconds`; `scripts/mock_netsuite.py`; unit tests + mapping PBT; end-to-end
+  adapter-vs-mock integration test; docs/erps/netsuite/*; local.sh + README/adding-an-erp updates.
+- [x] Build and Test — `construction/U3-netsuite-integration/build-and-test-summary.md`.
+  **Gates: ruff format stable, ruff check clean, lint-imports 4 kept / 0 broken,
+  APP_PROFILE=memory pytest 222 passed / 2 skipped (pre-existing offline self-skips); NetSuite
+  subset 43 passed.**
+
+### Increment status
+- **COMPLETE through Build and Test.** Adapter verified end-to-end against the faithful mock
+  (incl. independent OAuth signature verification). Live-sandbox walk and thin-webhook fast path
+  are the documented, out-of-scope remaining items (polling-only until then).
+
+### Extension Configuration (this increment)
+| Extension | Enabled | Decided At |
+|---|---|---|
+| Security Baseline | No (local/PoC, matches Inc 2) | Requirements Analysis |
+| Resiliency Baseline | Yes — adapter-call reliability (timeout, terminal/transient); infra/DR N/A | Requirements Analysis |
+| Property-Based Testing | Partial — `_map_netsuite` (pure fn, never raises / unmapped→None) | Requirements Analysis |
+
+---
+
+## Increment — U4 Functional Design catch-up (ERP connections + mapping redesign)
+- **Started**: 2026-10-15
+- **Goal**: U4-admin's Functional Design artifacts had drifted far from the real system
+  (described `ErpInstance`/`RoutingRule`/`MappingDefinition`, none of which exist) after
+  several increments of real feature work — connections-before-adapters (ADR-0021),
+  mapping/codegen deduped per ERP type (ADR-0022), reseller display names, and the
+  ConnectionsPage/MappingsPage UI rebuild — were built directly without a Functional
+  Design pass. This increment is that catch-up pass, plus reconciling `design/proposals/`
+  (a pre-existing, never-approved UI proposal) with what was actually shipped.
+- **Unit**: `U4-admin` (resumed — Functional Design already marked complete once; this is
+  a correction pass, same unit).
+- **No new [Answer]-tag questions asked**: every question Step 3 of the Functional Design
+  rule would raise (business logic, domain model, business rules, frontend components,
+  API integration points) is already answered by the real, running, live-verified system
+  — not a hypothesis needing the user's input. Asking would re-litigate decisions already
+  made and tested in the prior session, not resolve genuine ambiguity.
+
+### 🟢 CONSTRUCTION (resume, single unit)
+- [~] Functional Design (U4, corrected) — artifacts updated, **awaiting approval**:
+  - `construction/U4-admin/functional-design/business-logic-model.md` — rewritten (old
+    MVP-era model kept below a line, marked superseded, not deleted).
+  - `construction/U4-admin/functional-design/business-rules.md` — rewritten, same pattern.
+  - `construction/U4-admin/functional-design/domain-entities.md` — rewritten, same pattern.
+  - `construction/U4-admin/functional-design/frontend-components.md` — **new** (never
+    existed before this pass, despite the unit always having had a frontend).
+  - `design/README.md` / `design/proposals/README.md` — status notes added pointing to
+    the corrected Functional Design artifacts as current source of truth; proposal files
+    themselves left unmodified (history, not deleted/rewritten).
+- Code Generation: not applicable — this pass is documentation-only, reconciling AI-DLC
+  artifacts with code that already exists and is already live-verified (the
+  connections-before-adapters + mapping-dedupe work from the prior session).
+
+### Increment status
+Functional Design artifacts updated; presented for approval per the stage rule's Step 7/8.
+Not marked complete until the user explicitly approves.

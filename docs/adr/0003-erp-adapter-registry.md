@@ -2,8 +2,13 @@
 
 | | |
 |---|---|
-| Status | Accepted |
+| Status | Accepted — **amended by [ADR-0021](0021-connections-before-adapters.md)** |
 | Affects | `integration` module |
+
+> **Amendment (ADR-0021):** touch point 4 below (`ErpType` enum member) no longer
+> exists — `ErpConnection.erp_type` is a plain, normalized string now, so a connection
+> (and a mapping proposal for it) can exist before an adapter does. Adding a new ERP is
+> 3 touch points today, not 4.
 
 ## In one sentence
 Every ERP implements one protocol and one status-mapping function; adding a new ERP is

@@ -42,7 +42,7 @@ def _app(profile: str):
 
 def _seed(container, tenant: str, connection: str) -> None:
     """Seed a connection and a verified binding. Orders are adopted from the ERP."""
-    from src.modules.reference.connections.domain.models import ErpConnection, ErpType
+    from src.modules.reference.connections.domain.models import ErpConnection
     from src.modules.reference.tenancy.domain.models import BindingStatus, TenantConnectionBinding
     from src.shared.types import BindingId, ConnectionId, TenantId
 
@@ -50,7 +50,7 @@ def _seed(container, tenant: str, connection: str) -> None:
     container.connections.add(
         ErpConnection(
             connection_id=ConnectionId(connection),
-            erp_type=ErpType.ODOO,
+            erp_type="ODOO",
             instance_label="Smoke Odoo",
             base_url="http://odoo:8069",
             credentials={"database": "odoo", "username": "admin"},

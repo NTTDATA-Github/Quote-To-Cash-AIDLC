@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LogOut, Moon, Sun } from "lucide-react";
+import { Compass, LogOut, Moon, Sun } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
@@ -14,7 +14,7 @@ function initials(value: string | null): string {
 /** Click the avatar to open — a hover-opened menu that contains Sign out is a known
  * anti-pattern (a stray mouse-over signs you out of nothing, but it trains the wrong
  * habit and is unreachable on touch). Closes on Escape or an outside click. */
-export function UserMenu() {
+export function UserMenu({ onStartTour }: { onStartTour: () => void }) {
   const { email, username, roles, signOut } = useAuth();
   const { theme, toggle } = useTheme();
   const [open, setOpen] = useState(false);
@@ -59,6 +59,18 @@ export function UserMenu() {
           <button type="button" className="usermenu__item" role="menuitem" onClick={toggle}>
             {theme === "dark" ? <Sun size={15} strokeWidth={2} /> : <Moon size={15} strokeWidth={2} />}
             {theme === "dark" ? "Light theme" : "Dark theme"}
+          </button>
+          <button
+            type="button"
+            className="usermenu__item"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onStartTour();
+            }}
+          >
+            <Compass size={15} strokeWidth={2} />
+            Product tour
           </button>
           <button
             type="button"

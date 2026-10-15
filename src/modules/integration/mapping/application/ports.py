@@ -12,7 +12,25 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
-    from ..domain.models import AdapterRunResult, CanonicalSchema, MappingEntry, MappingJob
+    from src.modules.reference.connections.domain.models import ErpConnection
+    from src.shared.types import ConnectionId
+
+    from ..domain.models import (
+        AdapterRunResult,
+        CanonicalSchema,
+        MappingEntry,
+        MappingJob,
+    )
+    from ..domain.request_suggestion import SuggestedSampleRequest
+
+
+class ConnectionRepository(Protocol):
+    """The same port `reference.connections` defines — re-declared here (not imported
+    from that module's `application.ports`) so this module depends only on the domain
+    type it needs, not on another module's application layer."""
+
+    def get(self, connection_id: ConnectionId) -> ErpConnection | None: ...
+    def list_all(self) -> list[ErpConnection]: ...
 
 
 class CanonicalSchemaRepository(Protocol):
@@ -44,6 +62,16 @@ class MappingProposer(Protocol):
     ) -> list[MappingEntry]:
         """Call the LLM and return only genuine mappings (see `domain/proposal.py`).
         Raises on an unrecoverable provider/parse error after its own retries."""
+        ...
+
+
+class SampleRequestSuggester(Protocol):
+    def suggest(
+        self, erp_type: str, instance_label: str, base_url: str, canonical_fields_csv: str
+    ) -> list[SuggestedSampleRequest]:
+        """Call the LLM and return a short list of candidate sample requests (see
+        `domain/request_suggestion.py`). Raises on an unrecoverable provider/parse error
+        after its own retries."""
         ...
 
 

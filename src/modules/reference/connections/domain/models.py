@@ -10,12 +10,11 @@ if TYPE_CHECKING:
     from src.shared.types import ConnectionId
 
 
-class ErpType(str, Enum):
-    """Every ERP type the platform knows about. Adding one here is step 4 of "add a new
-    ERP" — see `integration/infrastructure/registry.py`'s module docstring for the full
-    checklist (adapter class, status mapper, registry entry, then this enum member)."""
-
-    ODOO = "ODOO"
+def normalize_erp_type(value: str) -> str:
+    """The one place `erp_type` is canonicalized (ADR-0021) — same input always compares
+    equal regardless of how an operator typed it, so "Shopify" and "shopify" are the same
+    ERP for the dedupe check in `MappingService` (ADR-0022), not two accidental ones."""
+    return value.strip().upper()
 
 
 class ConnectionStatus(str, Enum):
@@ -25,8 +24,13 @@ class ConnectionStatus(str, Enum):
 
 @dataclass
 class ErpConnection:
-    """One ERP instance (e.g. one Odoo database) — see `ErpType` for which ERPs are
-    currently registered. Operator-only identity.
+    """One ERP instance (e.g. one Odoo database). Operator-only identity.
+
+    `erp_type` is a normalized string, not a closed enum (ADR-0021) — a connection can
+    exist for a brand-new ERP before any code has been written for it. Whether delivery
+    actually works for this type is a separate, derived fact (`hasAdapter`, read from the
+    adapter registry at query time — see `composition.py`'s `has_adapter`), never stored
+    here.
 
     `secret_ref` is a Secrets Manager reference — never the raw credential (SECURITY-12).
     `instance_label` is operator-only and must never reach a reseller surface (FR-19).
@@ -43,17 +47,25 @@ class ErpConnection:
     parameters — e.g. Odoo needs `{"database": ..., "username": ...}`; a token-auth ERP
     (NetSuite, ERPNext) might need an account id, or nothing at all here (everything in
     `secret_ref`). This replaced fixed `database`/`username` fields, which forced Odoo's
-    login shape onto every future ERP regardless of whether it fit.
+    login shape onto every future ERP regardless of whether it fit (ADR-0012).
+
+    `auth_type` (ADR-0021) is read only by the generic onboarding probe for a connection
+    that has no adapter yet — one of `src.shared.erp_auth.AuthType`'s values, interpreted
+    against this same `credentials` bag plus the resolved secret. Once a real adapter
+    exists for this `erp_type`, the adapter owns its own auth logic and this field is
+    simply never read again; it defaults to `"NONE"` for every connection that was never
+    probed this way (including every connection created before this field existed).
     """
 
     connection_id: ConnectionId
-    erp_type: ErpType
+    erp_type: str
     instance_label: str
     base_url: str
     credentials: dict[str, str]
     secret_ref: str
     status: ConnectionStatus = ConnectionStatus.ACTIVE
     webhook_secret_ref: str | None = None
+    auth_type: str = "NONE"
 
     @property
     def is_active(self) -> bool:

@@ -42,7 +42,17 @@ function formatSum(sums: { currency: string; total: number }[]): string {
   return sums.map((s) => new Intl.NumberFormat("en-US", { style: "currency", currency: s.currency }).format(s.total)).join(" + ");
 }
 
-function OrderCard({ order, subsidiaryName, onClick }: { order: OperatorOrder; subsidiaryName: string; onClick: () => void }) {
+function OrderCard({
+  order,
+  resellerName,
+  subsidiaryName,
+  onClick,
+}: {
+  order: OperatorOrder;
+  resellerName: string;
+  subsidiaryName: string;
+  onClick: () => void;
+}) {
   const lastAt = lastEventAt(order);
   return (
     <div className="kcard" onClick={onClick}>
@@ -53,7 +63,7 @@ function OrderCard({ order, subsidiaryName, onClick }: { order: OperatorOrder; s
       <div className="kcard__meta">
         <span className="kcard__reseller">
           <Users size={11} strokeWidth={2} />
-          {order.tenantId}
+          {resellerName}
         </span>
         {order.erpOrderId && <span className="mono">{order.erpOrderId}</span>}
       </div>
@@ -71,11 +81,13 @@ function OrderCard({ order, subsidiaryName, onClick }: { order: OperatorOrder; s
 function KanbanColumnView({
   column,
   orders,
+  resellerName,
   subsidiaryName,
   onCardClick,
 }: {
   column: KanbanColumnDef;
   orders: OperatorOrder[];
+  resellerName: (o: OperatorOrder) => string;
   subsidiaryName: (o: OperatorOrder) => string;
   onCardClick: (o: OperatorOrder) => void;
 }) {
@@ -91,7 +103,15 @@ function KanbanColumnView({
         {orders.length === 0 ? (
           <div className="kcol__empty">No orders</div>
         ) : (
-          orders.map((o) => <OrderCard key={o.orderId} order={o} subsidiaryName={subsidiaryName(o)} onClick={() => onCardClick(o)} />)
+          orders.map((o) => (
+            <OrderCard
+              key={o.orderId}
+              order={o}
+              resellerName={resellerName(o)}
+              subsidiaryName={subsidiaryName(o)}
+              onClick={() => onCardClick(o)}
+            />
+          ))
         )}
       </div>
     </div>
@@ -104,10 +124,12 @@ function KanbanColumnView({
  * and click-only; no drag. */
 export function KanbanBoard({
   orders,
+  resellerName,
   subsidiaryName,
   onCardClick,
 }: {
   orders: OperatorOrder[];
+  resellerName: (o: OperatorOrder) => string;
   subsidiaryName: (o: OperatorOrder) => string;
   onCardClick: (o: OperatorOrder) => void;
 }) {
@@ -126,6 +148,7 @@ export function KanbanBoard({
           key={col.key}
           column={col}
           orders={grouped.get(col.key) ?? []}
+          resellerName={resellerName}
           subsidiaryName={subsidiaryName}
           onCardClick={onCardClick}
         />

@@ -46,6 +46,7 @@ mapping_jobs_table = Table(
     Column("error", Text),
     Column("adapter_run_id", String),
     Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("connection_id", String),
 )
 
 
@@ -79,6 +80,7 @@ def _job_to_model(row: Row) -> MappingJob:
         error=row.error,
         adapter_run_id=row.adapter_run_id,
         created_at=row.created_at,
+        connection_id=row.connection_id,
     )
 
 
@@ -94,6 +96,7 @@ def _job_values(job: MappingJob) -> dict:
         "error": job.error,
         "adapter_run_id": job.adapter_run_id,
         "created_at": job.created_at,
+        "connection_id": job.connection_id,
     }
 
 

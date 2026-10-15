@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .netsuite_adapter import NetSuiteAdapter
 from .odoo_adapter import OdooAdapter
 
 if TYPE_CHECKING:
@@ -29,4 +30,5 @@ def build_adapter_registry(settings: Settings) -> dict[str, ErpAdapter]:
     reconstructing an HTTP-client-equivalent on every delivery/reconcile call)."""
     return {
         "ODOO": OdooAdapter(timeout_seconds=settings.erp_odoo_timeout_seconds),
+        "NETSUITE": NetSuiteAdapter(timeout_seconds=settings.erp_netsuite_timeout_seconds),
     }

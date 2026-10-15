@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.shared.types import ConnectionId
 
-from ..domain.models import ConnectionStatus, ErpConnection, ErpType
+from ..domain.models import ConnectionStatus, ErpConnection
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Row
@@ -29,19 +29,21 @@ erp_connections_table = Table(
     Column("secret_ref", String, nullable=False),
     Column("status", String, nullable=False),
     Column("webhook_secret_ref", String),
+    Column("auth_type", String, nullable=False, server_default="NONE"),
 )
 
 
 def _to_model(row: Row) -> ErpConnection:
     return ErpConnection(
         connection_id=ConnectionId(row.connection_id),
-        erp_type=ErpType(row.erp_type),
+        erp_type=row.erp_type,
         instance_label=row.instance_label,
         base_url=row.base_url,
         credentials=dict(row.credentials or {}),
         secret_ref=row.secret_ref,
         status=ConnectionStatus(row.status),
         webhook_secret_ref=row.webhook_secret_ref,
+        auth_type=row.auth_type,
     )
 
 
@@ -54,13 +56,14 @@ class PostgresConnectionRepository:
     def add(self, connection: ErpConnection) -> None:
         values = {
             "connection_id": str(connection.connection_id),
-            "erp_type": connection.erp_type.value,
+            "erp_type": connection.erp_type,
             "instance_label": connection.instance_label,
             "base_url": connection.base_url,
             "credentials": dict(connection.credentials),
             "secret_ref": connection.secret_ref,
             "status": connection.status.value,
             "webhook_secret_ref": connection.webhook_secret_ref,
+            "auth_type": connection.auth_type,
         }
         session = self._session_factory()
         try:

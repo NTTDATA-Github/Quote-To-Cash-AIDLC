@@ -28,6 +28,7 @@ def _settings() -> Settings:
         domain_topic_arn="arn:aws:sns:us-east-1:000000000000:t.fifo",
         erp_adapter_mode="stub",
         erp_odoo_timeout_seconds=5.0,
+        erp_netsuite_timeout_seconds=5.0,
         log_level="INFO",
         reconcile_interval_seconds=900,
         worker_roles=frozenset(),
@@ -37,6 +38,7 @@ def _settings() -> Settings:
         cors_allowed_origins=[],
         mapping_bedrock_model_id="stub-model",
         agent_service_url="http://localhost:8002",
+        erp_probe_allow_private_addresses=False,
     )
 
 
@@ -49,6 +51,28 @@ def test_operator_role_is_required() -> None:
     result = _SCHEMA.execute_sync("{ canonicalSchemas { name } }", context_value=_context(roles=()))
     assert result.errors
     assert "OPERATOR" in result.errors[0].message
+
+
+def _register_connection(ctx: GraphQLContext, *, erp_type: str, label: str) -> str:
+    result = _SCHEMA.execute_sync(
+        """
+        mutation($t:String!,$l:String!,$b:String!,$c:JSON!,$a:AuthConfigInput!){
+          registerConnection(erpType:$t, instanceLabel:$l, baseUrl:$b, credentials:$c, auth:$a){
+            connectionId
+          }
+        }
+        """,
+        variable_values={
+            "t": erp_type,
+            "l": label,
+            "b": "https://erp.example.invalid",
+            "c": {},
+            "a": {"authType": "NONE", "params": {}, "secret": None},
+        },
+        context_value=ctx,
+    )
+    assert result.errors is None, result.errors
+    return result.data["registerConnection"]["connectionId"]
 
 
 def test_register_submit_poll_approve_flow() -> None:
@@ -66,14 +90,16 @@ def test_register_submit_poll_approve_flow() -> None:
     listed = _SCHEMA.execute_sync("{ canonicalSchemas { name fieldCount } }", context_value=ctx)
     assert listed.data == {"canonicalSchemas": [{"name": "orders", "fieldCount": 2}]}
 
+    connection_id = _register_connection(ctx, erp_type="NETSUITE", label="NetSuite")
+
     submit = _SCHEMA.execute_sync(
         """
-        mutation($erp:String!,$files:[SampleFileInput!]!,$schema:String){
-          submitMapping(erpName:$erp, sampleFiles:$files, schemaName:$schema){ jobId status }
+        mutation($conn:String!,$files:[SampleFileInput!]!,$schema:String){
+          submitMapping(connectionId:$conn, sampleFiles:$files, schemaName:$schema){ jobId status }
         }
         """,
         variable_values={
-            "erp": "NetSuite",
+            "conn": connection_id,
             "files": [{"filename": "orders.csv", "content": "ORDER_ID,CUSTOMER\n1,Acme\n"}],
             "schema": "orders",
         },
@@ -111,14 +137,46 @@ def test_register_submit_poll_approve_flow() -> None:
     assert run.data["adapterRun"]["status"] == "DONE"
 
 
-def test_submit_without_canonical_source_errors() -> None:
+def test_test_erp_endpoint_returns_a_sample() -> None:
+    ctx = _context()
+    connection_id = _register_connection(ctx, erp_type="SHOPIFY", label="Shopify store")
     result = _SCHEMA.execute_sync(
         """
-        mutation($erp:String!,$files:[SampleFileInput!]!){
-          submitMapping(erpName:$erp, sampleFiles:$files){ jobId }
+        mutation($conn:String!,$path:String!){
+          testErpEndpoint(connectionId:$conn, path:$path){ label text error }
         }
         """,
-        variable_values={"erp": "X", "files": [{"filename": "a.csv", "content": "A\n1\n"}]},
-        context_value=_context(),
+        variable_values={"conn": connection_id, "path": "/orders"},
+        context_value=ctx,
+    )
+    assert result.errors is None, result.errors
+    # memory profile uses StubErpProbe, so a canned sample comes back with no error
+    assert result.data["testErpEndpoint"]["error"] is None
+    assert result.data["testErpEndpoint"]["text"]
+
+
+def test_test_erp_endpoint_requires_operator_role() -> None:
+    result = _SCHEMA.execute_sync(
+        'mutation{ testErpEndpoint(connectionId:"conn_x"){ label } }',
+        context_value=_context(roles=()),
+    )
+    assert result.errors
+    assert "OPERATOR" in result.errors[0].message
+
+
+def test_submit_without_canonical_source_errors() -> None:
+    ctx = _context()
+    connection_id = _register_connection(ctx, erp_type="X", label="X")
+    result = _SCHEMA.execute_sync(
+        """
+        mutation($conn:String!,$files:[SampleFileInput!]!){
+          submitMapping(connectionId:$conn, sampleFiles:$files){ jobId }
+        }
+        """,
+        variable_values={
+            "conn": connection_id,
+            "files": [{"filename": "a.csv", "content": "A\n1\n"}],
+        },
+        context_value=ctx,
     )
     assert result.errors

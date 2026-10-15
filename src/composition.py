@@ -33,6 +33,9 @@ from src.modules.integration.erp.infrastructure.registry import build_adapter_re
 from src.modules.integration.erp.infrastructure.stub_adapter import StubErpAdapter
 from src.modules.integration.mapping.application.processing import process_pending_jobs
 from src.modules.integration.mapping.application.service import MappingService
+from src.modules.integration.mapping.application.suggestion_service import (
+    SampleRequestSuggestionService,
+)
 from src.modules.integration.mapping.infrastructure.agent_launcher import HttpAdapterRunLauncher
 from src.modules.integration.mapping.infrastructure.llm_proposer import LlmMappingProposer
 from src.modules.integration.mapping.infrastructure.memory import (
@@ -40,10 +43,14 @@ from src.modules.integration.mapping.infrastructure.memory import (
     InMemoryMappingJobRepository,
     StubAdapterRunLauncher,
     StubMappingProposer,
+    StubSampleRequestSuggester,
 )
 from src.modules.integration.mapping.infrastructure.postgres import (
     PostgresCanonicalSchemaRepository,
     PostgresMappingJobRepository,
+)
+from src.modules.integration.mapping.infrastructure.request_suggester import (
+    LlmSampleRequestSuggester,
 )
 from src.modules.integration.webhooks_inbound.application.ingress import InboundWebhookService
 from src.modules.integration.webhooks_inbound.infrastructure.memory import (
@@ -69,8 +76,14 @@ from src.modules.integration.webhooks_outbound.infrastructure.postgres import (
 )
 from src.modules.reference.connections.infrastructure.memory import InMemoryConnectionRepository
 from src.modules.reference.connections.infrastructure.postgres import PostgresConnectionRepository
-from src.modules.reference.tenancy.infrastructure.memory import InMemoryBindingRepository
-from src.modules.reference.tenancy.infrastructure.postgres import PostgresBindingRepository
+from src.modules.reference.tenancy.infrastructure.memory import (
+    InMemoryBindingRepository,
+    InMemoryResellerRepository,
+)
+from src.modules.reference.tenancy.infrastructure.postgres import (
+    PostgresBindingRepository,
+    PostgresResellerRepository,
+)
 from src.modules.sales.invoicing.application.service import InvoiceService
 from src.modules.sales.invoicing.domain.aggregate import Invoice
 from src.modules.sales.ordering.application.adapters import (
@@ -99,25 +112,29 @@ from src.modules.sales.quoting.infrastructure.postgres import (
 from src.modules.sales.shipment.application.service import ShipmentService
 from src.modules.sales.shipment.domain.aggregate import Shipment
 from src.shared.config import Settings, get_settings
+from src.shared.erp_probe import ErpProbe, GenericErpProbe, StubErpProbe
 from src.shared.eventsourcing import EventSourcedRepository, EventStore, InMemoryEventStore
 from src.shared.identity import (
     CognitoIdentityProvider,
+    EntraIdentityProvider,
     HeaderStubIdentityProvider,
     IdentityProvider,
 )
 from src.shared.identity.cognito import issuer_url
-from src.shared.llm import BedrockLlmClient
+from src.shared.llm import AnthropicLlmClient, BedrockLlmClient
 from src.shared.messaging import InMemoryMessageBus
 from src.shared.messaging.facts import BusFactPublisher, FactPublisher, OutboxFactPublisher
 from src.shared.persistence.engine import get_session_factory
 from src.shared.persistence.event_store import PostgresEventStore
 from src.shared.secrets import EnvSecretStore, SecretStore
 from src.shared.secrets.aws import SecretsManagerSecretStore
+from src.shared.secrets.azure import KeyVaultSecretStore
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from src.modules.integration.mapping.application.ports import (
+        LlmClient,
         MappingJobRepository,
         MappingProposer,
     )
@@ -126,7 +143,10 @@ if TYPE_CHECKING:
         WebhookEndpointRepository,
     )
     from src.modules.reference.connections.application.ports import ConnectionRepository
-    from src.modules.reference.tenancy.application.ports import BindingRepository
+    from src.modules.reference.tenancy.application.ports import (
+        BindingRepository,
+        ResellerRepository,
+    )
     from src.modules.sales.quoting.application.ports import (
         QuoteRepository,
         SubsidiaryRepository,
@@ -170,7 +190,7 @@ class ConnectionsResolver:
         if connection is None or not connection.is_active:
             return None
         return ErpTarget(
-            erp_type=connection.erp_type.value,
+            erp_type=connection.erp_type,
             base_url=connection.base_url,
             credentials=dict(connection.credentials),
             secret=self._secrets.get_secret(connection.secret_ref),
@@ -208,6 +228,7 @@ class Container:
     drain: Callable[[], None]  # memory: bus.run_until_empty; postgres: no-op, worker drains
     connections: ConnectionRepository
     bindings: BindingRepository
+    resellers: ResellerRepository
     order_processor: OrderProcessor
     delivery_handler: DeliveryHandler
     order_projector: OrderProjector
@@ -221,6 +242,10 @@ class Container:
     webhook_dispatcher: WebhookDispatchService
     # exposed so WebhookEndpointService (GraphQL layer) can generate+store signing secrets
     secrets: SecretStore
+    # the ERP probe used both by MappingService (onboarding sample fetch) and by
+    # ConnectionService's "test endpoint" action (GraphQL layer) — stub offline, generic
+    # (stdlib HTTP) in postgres
+    erp_probe: ErpProbe
     # catalog/connections/tenancy publish notifications through this (src/shared/messaging/facts.py)
     facts: FactPublisher
     shipment_service: ShipmentService
@@ -243,6 +268,13 @@ class Container:
     mapping_jobs: MappingJobRepository
     mapping_proposer: MappingProposer
     mapping_process_pending: Callable[[], int]
+    # Suggests which record kinds/paths to pull live during onboarding (separate from
+    # mapping_proposer — a different, synchronous LLM call, answered straight from the
+    # request path since it's cheap, not handed to the worker).
+    sample_request_suggestion: SampleRequestSuggestionService
+    # ADR-0021's derived `hasAdapter` fact — read by the GraphQL layer per-connection and
+    # by MappingService's per-erp_type dedupe guard (ADR-0022); never stored.
+    has_adapter: Callable[[str], bool]
 
 
 def _matched_lines(order: Order, items: list) -> list[dict[str, str]]:
@@ -277,6 +309,21 @@ def _erp_shipment_sync(orders: EventSourcedRepository[Order], shipments: Shipmen
             )
 
     return sync
+
+
+def _webhook_refresh(connections, adapter_for, sync_shipments, sync_invoices):
+    """A webhook names the order. Shipments and invoices are read from the ERP, same as
+    the sweep."""
+
+    def refresh(connection_id: ConnectionId, erp_order_id: str, order_id: str) -> None:
+        target = connections.resolve(connection_id)
+        if target is None:
+            return
+        adapter = adapter_for(target.erp_type)
+        sync_shipments(order_id, adapter.fetch_shipments(target, erp_order_id))
+        sync_invoices(order_id, adapter.fetch_invoices(target, erp_order_id))
+
+    return refresh
 
 
 def _erp_invoice_sync(orders: EventSourcedRepository[Order], invoices: InvoiceService):
@@ -321,6 +368,7 @@ def _build_memory_container(settings: Settings) -> Container:
 
     connections = InMemoryConnectionRepository()
     bindings = InMemoryBindingRepository()
+    resellers = InMemoryResellerRepository()
     quotes = InMemoryQuoteRepository()
     subsidiaries = InMemorySubsidiaryRepository()
     subsidiary_routes = InMemorySubsidiaryRouteRepository()
@@ -372,12 +420,29 @@ def _build_memory_container(settings: Settings) -> Container:
         inbox=InMemoryEventInbox(),
         locator=locator,
         order_status=StatusApplier(repo),
+        refresh=_webhook_refresh(
+            ConnectionsResolver(connections, secrets),
+            adapter_for,
+            _erp_shipment_sync(repo, shipment_service),
+            _erp_invoice_sync(repo, invoice_service),
+        ),
     )
 
+    erp_probe: ErpProbe = StubErpProbe()
     mapping_jobs: MappingJobRepository = InMemoryMappingJobRepository()
     mapping_proposer: MappingProposer = StubMappingProposer()
     mapping_service = MappingService(
-        mapping_jobs, InMemoryCanonicalSchemaRepository(), StubAdapterRunLauncher()
+        mapping_jobs,
+        InMemoryCanonicalSchemaRepository(),
+        StubAdapterRunLauncher(),
+        erp_probe,
+        secrets,
+        connections,
+        # Memory profile: nothing pre-adapted, so the onboarding flow stays testable
+        lambda _erp_type: False,
+    )
+    sample_request_suggestion = SampleRequestSuggestionService(
+        mapping_service, StubSampleRequestSuggester()
     )
 
     return Container(
@@ -389,6 +454,7 @@ def _build_memory_container(settings: Settings) -> Container:
         drain=bus.run_until_empty,
         connections=connections,
         bindings=bindings,
+        resellers=resellers,
         order_processor=processor,
         delivery_handler=delivery,
         order_projector=projector,
@@ -399,6 +465,7 @@ def _build_memory_container(settings: Settings) -> Container:
         webhook_deliveries=webhook_deliveries,
         webhook_dispatcher=webhook_dispatcher,
         secrets=secrets,
+        erp_probe=erp_probe,
         facts=BusFactPublisher(bus),
         shipment_service=shipment_service,
         invoice_service=invoice_service,
@@ -413,6 +480,8 @@ def _build_memory_container(settings: Settings) -> Container:
         mapping_proposer=mapping_proposer,
         # memory profile has no worker — process the just-submitted job inline (offline stub)
         mapping_process_pending=lambda: process_pending_jobs(mapping_jobs, mapping_proposer),
+        sample_request_suggestion=sample_request_suggestion,
+        has_adapter=lambda _erp_type: False,
     )
 
 
@@ -435,12 +504,33 @@ def _resolve_adapter_for(settings: Settings) -> Callable[[str], ErpAdapter]:
     return resolve
 
 
+def _has_adapter_for(settings: Settings) -> Callable[[str], bool]:
+    """ADR-0021's `hasAdapter` — always reflects the *real* adapter registry, regardless
+    of `erp_adapter_mode`. Deliberately independent of `_resolve_adapter_for`'s stub
+    override: that mode fakes *delivery* for local testing, but mapping-eligibility
+    (ADR-0022) should still ask "does real code exist", not "are we pretending it does"."""
+    registry = build_adapter_registry(settings)
+    return lambda erp_type: erp_type in registry
+
+
 def _resolve_identity_provider(settings: Settings) -> IdentityProvider:
-    """Real Cognito verification once `COGNITO_USER_POOL_ID`/`COGNITO_CLIENT_ID` are
-    configured; the header stub until then (so the postgres profile stays usable for
-    local dev against floci — with a *live* Odoo/worker/SQS pipeline but no Cognito user
-    pool set up yet — without hard-failing container construction). Set both env vars to
-    turn on real verification; nothing else changes."""
+    """Real verification once the active cloud's identity env vars are configured; the
+    header stub until then (so the postgres profile stays usable for local dev against
+    floci — with a *live* Odoo/worker/SQS pipeline but no identity provider set up yet —
+    without hard-failing container construction). ADR-0023: `cloud_provider` picks Cognito
+    vs. Entra; within either, setting the relevant env vars turns on real verification."""
+    if settings.cloud_provider == "azure":
+        if not settings.entra_tenant_id or not settings.entra_client_id:
+            log.warning(
+                "ENTRA_TENANT_ID/ENTRA_CLIENT_ID not set — using the header stub, not real auth"
+            )
+            return HeaderStubIdentityProvider()
+        return EntraIdentityProvider(
+            tenant_id=settings.entra_tenant_id,
+            client_id=settings.entra_client_id,
+            tenant_claim_name=settings.entra_tenant_claim_name,
+        )
+
     if not settings.cognito_user_pool_id or not settings.cognito_client_id:
         log.warning(
             "COGNITO_USER_POOL_ID/COGNITO_CLIENT_ID not set — using the header stub, not real auth"
@@ -457,6 +547,31 @@ def _resolve_identity_provider(settings: Settings) -> IdentityProvider:
         issuer=issuer,
         resource_server_id=settings.cognito_resource_server_id,
     )
+
+
+def _resolve_secret_store(settings: Settings) -> SecretStore:
+    """ADR-0023: which cloud's secret store backs the `SecretStore` port."""
+    if settings.cloud_provider == "azure":
+        assert settings.azure_key_vault_uri, "AZURE_KEY_VAULT_URI required for CLOUD_PROVIDER=azure"
+        return KeyVaultSecretStore(
+            settings.azure_key_vault_uri,
+            managed_identity_client_id=settings.azure_managed_identity_client_id,
+        )
+    return SecretsManagerSecretStore(
+        endpoint_url=settings.aws_endpoint_url, region_name=settings.aws_region
+    )
+
+
+def _llm_client(settings: Settings, secrets: SecretStore) -> LlmClient:
+    """ADR-0023: which cloud's LLM client backs `MappingProposer`/sample-request
+    suggestions. The Anthropic API key is never a plaintext env var — same "secrets never
+    in plaintext" rule as every other credential (SECURITY-12, `secrets/store.py`) —
+    it's read from Key Vault through the same `SecretStore` port everything else uses."""
+    if settings.cloud_provider == "azure":
+        return AnthropicLlmClient(
+            settings.mapping_anthropic_model, api_key=secrets.get_secret("anthropic-api-key")
+        )
+    return BedrockLlmClient(settings.mapping_bedrock_model_id, settings.aws_region)
 
 
 def _build_postgres_container(settings: Settings) -> Container:
@@ -477,13 +592,12 @@ def _build_postgres_container(settings: Settings) -> Container:
 
     connections = PostgresConnectionRepository(session_factory)
     bindings = PostgresBindingRepository(session_factory)
+    resellers = PostgresResellerRepository(session_factory)
     quotes = PostgresQuoteRepository(session_factory)
     subsidiaries = PostgresSubsidiaryRepository(session_factory)
     subsidiary_routes = PostgresSubsidiaryRouteRepository(session_factory)
     quote_service = QuoteService(quotes, subsidiaries, subsidiary_routes)
-    secrets: SecretStore = SecretsManagerSecretStore(
-        endpoint_url=settings.aws_endpoint_url, region_name=settings.aws_region
-    )
+    secrets: SecretStore = _resolve_secret_store(settings)
     identity = _resolve_identity_provider(settings)
 
     projections = PostgresOrderProjectionStore(session_factory)
@@ -509,6 +623,12 @@ def _build_postgres_container(settings: Settings) -> Container:
         inbox=PostgresEventInbox(session_factory),
         locator=locator,
         order_status=status_applier,
+        refresh=_webhook_refresh(
+            connections_resolver,
+            adapter_for,
+            _erp_shipment_sync(repo, shipment_service),
+            _erp_invoice_sync(repo, invoice_service),
+        ),
     )
 
     order_service = OrderService(repo)
@@ -577,14 +697,23 @@ def _build_postgres_container(settings: Settings) -> Container:
         orders=projections,
     )
 
-    mapping_jobs: MappingJobRepository = PostgresMappingJobRepository(session_factory)
-    mapping_proposer: MappingProposer = LlmMappingProposer(
-        BedrockLlmClient(settings.mapping_bedrock_model_id, settings.aws_region)
+    erp_probe: ErpProbe = GenericErpProbe(
+        secrets, allow_private_addresses=settings.erp_probe_allow_private_addresses
     )
+    mapping_jobs: MappingJobRepository = PostgresMappingJobRepository(session_factory)
+    mapping_proposer: MappingProposer = LlmMappingProposer(_llm_client(settings, secrets))
+    has_adapter = _has_adapter_for(settings)
     mapping_service = MappingService(
         mapping_jobs,
         PostgresCanonicalSchemaRepository(session_factory),
         HttpAdapterRunLauncher(settings.agent_service_url),
+        erp_probe,
+        secrets,
+        connections,
+        has_adapter,
+    )
+    sample_request_suggestion = SampleRequestSuggestionService(
+        mapping_service, LlmSampleRequestSuggester(_llm_client(settings, secrets))
     )
 
     return Container(
@@ -596,6 +725,7 @@ def _build_postgres_container(settings: Settings) -> Container:
         drain=lambda: None,
         connections=connections,
         bindings=bindings,
+        resellers=resellers,
         order_processor=processor,
         delivery_handler=delivery,
         order_projector=projector,
@@ -606,6 +736,7 @@ def _build_postgres_container(settings: Settings) -> Container:
         webhook_deliveries=webhook_deliveries,
         webhook_dispatcher=webhook_dispatcher,
         secrets=secrets,
+        erp_probe=erp_probe,
         facts=OutboxFactPublisher(session_factory),
         shipment_service=shipment_service,
         invoice_service=invoice_service,
@@ -620,4 +751,6 @@ def _build_postgres_container(settings: Settings) -> Container:
         mapping_proposer=mapping_proposer,
         # the `mapping` worker role runs the LLM off the request path — not inline here
         mapping_process_pending=lambda: 0,
+        sample_request_suggestion=sample_request_suggestion,
+        has_adapter=has_adapter,
     )

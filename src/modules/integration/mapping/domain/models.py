@@ -74,6 +74,9 @@ class MappingJob:
     error: str | None = None
     adapter_run_id: str | None = None
     created_at: datetime = field(default_factory=_utcnow)
+    # The connection this job was submitted for (ADR-0021/0022) — every job submitted
+    # through the current flow has one; `None` only for jobs that predate this field.
+    connection_id: str | None = None
 
     @property
     def is_terminal(self) -> bool:

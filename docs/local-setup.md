@@ -48,7 +48,7 @@ export AWS_ENDPOINT_URL=http://localhost:4566
 export AWS_DEFAULT_REGION=us-east-1
 export AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test
 python -m scripts.messaging_bootstrap
-python -m scripts.seed_demo    # connection, verified binding, subsidiary, quote qte_demo
+python -m scripts.seed_demo    # Odoo customer/products/order + connection, binding, subsidiary
 ```
 
 ## 6. Run the api + worker

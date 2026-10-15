@@ -6,7 +6,7 @@ import { DataTable, type Column } from "../../components/DataTable";
 import { FilterMenu } from "../../components/FilterMenu";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
-import { useNotifications, useOperatorOrders, useSubsidiaries } from "../../hooks/useAdmin";
+import { useNotifications, useOperatorOrders, useResellers, useSubsidiaries } from "../../hooks/useAdmin";
 import type { NotificationDelivery } from "../../api/queries/admin";
 import { statusLabel } from "../../lib/statusLabel";
 
@@ -33,17 +33,23 @@ export function NotificationsPage() {
   const { data, isLoading, error } = useNotifications();
   const { data: orders } = useOperatorOrders();
   const { data: subsidiaries } = useSubsidiaries();
+  const { data: resellers } = useResellers();
   const [search, setSearch] = useState("");
   const [eventType, setEventType] = useState("all");
   const [delivery, setDelivery] = useState<(typeof DELIVERY_FILTERS)[number]>("all");
 
   const subsidiaryByOrder = new Map((orders ?? []).map((o) => [o.orderId, o.parties.subsidiaryId]));
   const nameById = new Map((subsidiaries ?? []).map((s) => [s.subsidiaryId, s.name]));
+  const resellerNameById = new Map((resellers ?? []).map((r) => [r.tenantId, r.name]));
 
   function subsidiaryName(orderId: string): string {
     const id = subsidiaryByOrder.get(orderId) ?? "";
     if (!id) return "";
     return nameById.get(id) ?? id;
+  }
+
+  function resellerName(tenantId: string): string {
+    return resellerNameById.get(tenantId) ?? tenantId;
   }
 
   const eventTypes = Array.from(new Set((data ?? []).map((d) => d.eventType)));
@@ -52,14 +58,16 @@ export function NotificationsPage() {
     .filter((d) => delivery === "all" || d.status === delivery)
     .filter((d) => eventType === "all" || d.eventType === eventType)
     .filter((d) => {
-      const haystack = [d.tenantId, d.orderId, EVENT_LABEL[d.eventType] ?? d.eventType, subsidiaryName(d.orderId)].join(" ").toLowerCase();
+      const haystack = [d.tenantId, resellerName(d.tenantId), d.orderId, EVENT_LABEL[d.eventType] ?? d.eventType, subsidiaryName(d.orderId)]
+        .join(" ")
+        .toLowerCase();
       return haystack.includes(search.toLowerCase());
     })
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
   const columns: Column<NotificationDelivery>[] = [
     { key: "when", header: "When", render: (d) => formatTime(d.occurredAt), sortValue: (d) => new Date(d.occurredAt).getTime() },
-    { key: "reseller", header: "Reseller", render: (d) => <span className="id">{d.tenantId}</span>, sortValue: (d) => d.tenantId },
+    { key: "reseller", header: "Reseller", render: (d) => resellerName(d.tenantId), sortValue: (d) => resellerName(d.tenantId) },
     {
       key: "event",
       header: "Notification",

@@ -37,6 +37,7 @@ from src.composition import build_container
 from src.modules.integration.mapping.application.processing import process_pending_jobs
 from src.shared.config import get_settings
 from src.shared.messaging.aws import SnsFifoPublisher, SqsConsumerRunner
+from src.shared.messaging.azure import ServiceBusConsumerRunner, ServiceBusPublisher
 from src.shared.persistence.engine import get_session_factory
 from src.shared.persistence.relay import OutboxRelay
 
@@ -161,46 +162,76 @@ def main() -> None:  # pragma: no cover - process entrypoint
     session_factory = get_session_factory(settings.database_url)
     assert container.reconcile_sweeper is not None  # guaranteed by the postgres profile
 
-    sqs = boto3.client(
-        "sqs", endpoint_url=settings.aws_endpoint_url, region_name=settings.aws_region
-    )
-
     threads: list[threading.Thread] = []
 
-    if "relay" in roles:
-        publisher = SnsFifoPublisher(
-            settings.domain_topic_arn,
-            endpoint_url=settings.aws_endpoint_url,
-            region_name=settings.aws_region,
-        )
-        relay = RelayRunner(OutboxRelay(session_factory, publisher))
-        threads.append(threading.Thread(target=relay.run_forever, name="outbox-relay", daemon=True))
-
-    # (queue name, consumer name, handler) — only the ones this process's roles include
-    # are built at all: no SQS lookup, no thread, for a role this process doesn't run.
+    # (role, handler) — only the ones this process's roles include are built at all: no
+    # queue/subscription lookup, no thread, for a role this process doesn't run.
     consumer_specs = [
-        ("order-processing", "order-processing.fifo", container.order_processor.handle),
-        ("order-delivery", "order-delivery.fifo", container.delivery_handler.handle),
-        (
-            "order-fulfillment",
-            "order-fulfillment.fifo",
-            container.order_fulfillment_consumer.handle,
-        ),
-        ("projections", "projections.fifo", container.order_projector.handle),
-        ("webhook-dispatch", "webhook-dispatch.fifo", container.webhook_dispatcher.handle),
+        ("order-processing", container.order_processor.handle),
+        ("order-delivery", container.delivery_handler.handle),
+        ("order-fulfillment", container.order_fulfillment_consumer.handle),
+        ("projections", container.order_projector.handle),
+        ("webhook-dispatch", container.webhook_dispatcher.handle),
     ]
-    for role, queue_name, handler in consumer_specs:
-        if role not in roles:
-            continue
-        consumer = SqsConsumerRunner(
-            _queue_url(sqs, queue_name),
-            _dedupe(role, session_factory, handler),
-            endpoint_url=settings.aws_endpoint_url,
-            region_name=settings.aws_region,
+
+    if settings.cloud_provider == "azure":
+        # ADR-0023: Service Bus subscription names match the role name exactly, no
+        # ".fifo" suffix convention (infra/azure/modules/messaging) — unlike SQS below.
+        assert (
+            settings.azure_servicebus_namespace
+        ), "AZURE_SERVICEBUS_NAMESPACE required when CLOUD_PROVIDER=azure"
+        if "relay" in roles:
+            publisher = ServiceBusPublisher(
+                settings.azure_servicebus_namespace,
+                settings.azure_servicebus_topic,
+                managed_identity_client_id=settings.azure_managed_identity_client_id,
+            )
+            relay = RelayRunner(OutboxRelay(session_factory, publisher))
+            threads.append(
+                threading.Thread(target=relay.run_forever, name="outbox-relay", daemon=True)
+            )
+
+        for role, handler in consumer_specs:
+            if role not in roles:
+                continue
+            consumer = ServiceBusConsumerRunner(
+                settings.azure_servicebus_namespace,
+                settings.azure_servicebus_topic,
+                role,
+                _dedupe(role, session_factory, handler),
+                managed_identity_client_id=settings.azure_managed_identity_client_id,
+            )
+            threads.append(
+                threading.Thread(target=consumer.run_forever, name=f"consumer-{role}", daemon=True)
+            )
+    else:
+        sqs = boto3.client(
+            "sqs", endpoint_url=settings.aws_endpoint_url, region_name=settings.aws_region
         )
-        threads.append(
-            threading.Thread(target=consumer.run_forever, name=f"consumer-{role}", daemon=True)
-        )
+
+        if "relay" in roles:
+            publisher = SnsFifoPublisher(
+                settings.domain_topic_arn,
+                endpoint_url=settings.aws_endpoint_url,
+                region_name=settings.aws_region,
+            )
+            relay = RelayRunner(OutboxRelay(session_factory, publisher))
+            threads.append(
+                threading.Thread(target=relay.run_forever, name="outbox-relay", daemon=True)
+            )
+
+        for role, handler in consumer_specs:
+            if role not in roles:
+                continue
+            consumer = SqsConsumerRunner(
+                _queue_url(sqs, f"{role}.fifo"),
+                _dedupe(role, session_factory, handler),
+                endpoint_url=settings.aws_endpoint_url,
+                region_name=settings.aws_region,
+            )
+            threads.append(
+                threading.Thread(target=consumer.run_forever, name=f"consumer-{role}", daemon=True)
+            )
 
     if "reconcile" in roles:
         scheduler = ReconcileScheduler(

@@ -21,3 +21,19 @@ class MappingNotReady(Exception):
 
 class NoCanonicalFields(Exception):
     """submit_job got neither a registered schema name nor an inline CSV."""
+
+
+class ProbeFailed(Exception):
+    """One or more sample requests against a new ERP failed (bad URL, auth, timeout) —
+    distinct from an LLM proposal failure, since the fix is different (check the
+    connection details, not the mapping)."""
+
+
+class ConnectionNotFound(Exception):
+    """A mapping submission referenced a connection id that doesn't exist."""
+
+
+class ErpTypeNotEligible(Exception):
+    """ADR-0022: this connection's `erp_type` already has a working adapter, or already
+    has a pending/approved mapping job — submitting another would generate a redundant
+    adapter PR for an ERP that's already covered (or already being covered)."""
