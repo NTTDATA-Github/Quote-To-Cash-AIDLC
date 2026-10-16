@@ -112,6 +112,8 @@ module "compute" {
   container_cpu                = var.container_cpu
   container_memory             = var.container_memory
   app_env                      = local.app_env
+
+  depends_on = [module.foundry]
 }
 
 module "ui" {

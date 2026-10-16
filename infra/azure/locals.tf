@@ -40,5 +40,8 @@ locals {
     # fall back to the header stub, same as an unset COGNITO_CLIENT_ID on the AWS path.
     { name = "ENTRA_CLIENT_ID", value = module.identity.client_id != null ? module.identity.client_id : "" },
     { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
+    # Mapping service uses OpenAI (gpt-4o) via Azure Foundry; pass endpoint to enable it
+    { name = "FOUNDRY_ENDPOINT", value = module.foundry.foundry_endpoint },
+    { name = "MAPPING_LLM_PROVIDER", value = "openai" },
   ]
 }
