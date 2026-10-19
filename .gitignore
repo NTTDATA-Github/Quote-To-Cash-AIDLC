@@ -41,10 +41,11 @@ Thumbs.db
 # Terraform provider binaries (keep .terraform.lock.hcl)
 .terraform/
 # Local CLI config so bootstrap can reuse the provider already on disk.
-infra/terraform/bootstrap/terraform.rc
+infra/azure/bootstrap/terraform.rc
 # Bootstrap's state is local (chicken/egg: it creates the remote-state bucket itself).
-infra/terraform/bootstrap/terraform.tfstate*
 infra/azure/bootstrap/terraform.tfstate*
+# Terraform plan files embed resolved values; never commit them.
+tfplan*
 # Local crash-recovery dump Terraform writes after a failed state push — may contain
 # real secrets in plaintext, never commit it.
 errored.tfstate
