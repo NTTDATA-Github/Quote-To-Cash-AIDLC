@@ -178,6 +178,8 @@ module "mocks" {
   registry_admin_password      = module.registry.admin_password
   mock_netsuite_image          = var.mock_netsuite_image != "" ? var.mock_netsuite_image : "${module.registry.login_server}/o2c/mock-netsuite:bootstrap"
   mock_reseller_image          = var.mock_reseller_image != "" ? var.mock_reseller_image : "${module.registry.login_server}/o2c/mock-reseller:bootstrap"
+  api_fqdn                     = module.compute.api_fqdn
+  netsuite_connection_id       = var.netsuite_connection_id
 }
 
 module "foundry" {
@@ -194,6 +196,12 @@ module "foundry" {
 }
 
 module "agent" {
+  # Optional: Azure Container Apps rejects a secret with neither a value nor a
+  # keyVaultUrl+identity -- an empty string counts as neither. Needs a GitHub token plus
+  # EITHER an Anthropic API key or a Bedrock bearer token (matches the local
+  # erp-agent-service/.env's own CLAUDE_CODE_USE_BEDROCK=1 setup, which has no Anthropic
+  # key at all). No token supplied -> skip the module instead of failing the whole apply.
+  count                        = var.agent_github_token != "" && (var.agent_anthropic_api_key != "" || var.agent_aws_bearer_token != "") ? 1 : 0
   source                       = "./modules/agent"
   prefix                       = local.prefix
   resource_group_name          = azurerm_resource_group.main.name
@@ -201,9 +209,12 @@ module "agent" {
   registry_login_server        = module.registry.login_server
   registry_admin_username      = module.registry.admin_username
   registry_admin_password      = module.registry.admin_password
+  image                        = var.agent_image != "" ? var.agent_image : "${module.registry.login_server}/erp-agent-service:bootstrap"
   target_repo_url              = var.agent_target_repo_url
   github_token                 = var.agent_github_token
   anthropic_api_key            = var.agent_anthropic_api_key
+  aws_region                   = var.agent_aws_region
+  aws_bearer_token             = var.agent_aws_bearer_token
   coding_agent_model           = var.coding_agent_model
 
   depends_on = [module.foundry]

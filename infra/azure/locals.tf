@@ -31,6 +31,7 @@ locals {
     { name = "DOMAIN_TOPIC_NAME", value = module.messaging.topic_name },
     { name = "AZURE_KEY_VAULT_URI", value = module.secrets.vault_uri },
     { name = "ERP_ADAPTER_MODE", value = var.erp_adapter_mode },
+    { name = "RECONCILE_INTERVAL_SECONDS", value = tostring(var.reconcile_interval_seconds) },
     { name = "LOG_LEVEL", value = "INFO" },
     { name = "ENTRA_TENANT_ID", value = var.entra_tenant_id },
     # Ternary, not coalesce(): coalesce() also rejects "" as a non-match, so it errors
@@ -40,8 +41,10 @@ locals {
     # fall back to the header stub, same as an unset COGNITO_CLIENT_ID on the AWS path.
     { name = "ENTRA_CLIENT_ID", value = module.identity.client_id != null ? module.identity.client_id : "" },
     { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
-    # Mapping service uses OpenAI (gpt-4o) via Azure Foundry; pass endpoint to enable it
+    # Mapping service LLM: OpenAI-format model on Azure Foundry. The model id is the
+    # Terraform-created deployment name, so the app can't drift from what is deployed.
     { name = "FOUNDRY_ENDPOINT", value = module.foundry.foundry_endpoint },
     { name = "MAPPING_LLM_PROVIDER", value = "openai" },
+    { name = "MAPPING_OPENAI_MODEL", value = module.foundry.deployment_name },
   ]
 }

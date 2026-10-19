@@ -20,7 +20,10 @@ from src.modules.integration.webhooks_inbound.infrastructure.postgres import (  
     PostgresDedupStore,
     PostgresOrderLocator,
 )
-from src.modules.reference.connections.domain.models import ErpConnection  # noqa: E402
+from src.modules.reference.connections.domain.models import (  # noqa: E402
+    ConnectionStatus,
+    ErpConnection,
+)
 from src.modules.reference.connections.infrastructure.postgres import (  # noqa: E402
     PostgresConnectionRepository,
 )
@@ -108,6 +111,18 @@ def test_connection_repository_roundtrip() -> None:
     conn = _make_connection()
     assert repo.get(conn.connection_id) == conn
     assert conn in repo.list_active()
+
+
+def test_connection_repository_update_persists_status_and_label() -> None:
+    repo = PostgresConnectionRepository(_factory)
+    conn = _make_connection()
+    conn.status = ConnectionStatus.PAUSED
+    conn.instance_label = "Renamed Odoo"
+    repo.update(conn)
+    reloaded = repo.get(conn.connection_id)
+    assert reloaded is not None
+    assert reloaded.status is ConnectionStatus.PAUSED
+    assert reloaded.instance_label == "Renamed Odoo"
 
 
 def test_binding_repository_enforces_uniqueness_at_db() -> None:

@@ -169,6 +169,12 @@ variable "erp_adapter_mode" {
   default     = "stub"
 }
 
+variable "reconcile_interval_seconds" {
+  description = "How often the worker's ReconcileSweeper re-polls every active ERP connection (settings.py default: 900)."
+  type        = number
+  default     = 900
+}
+
 variable "cors_allowed_origins" {
   description = "Comma-separated UI origins allowed by the api."
   type        = string
@@ -212,6 +218,12 @@ variable "mock_reseller_image" {
   default     = ""
 }
 
+variable "netsuite_connection_id" {
+  description = "connectionId registerConnection returned for the NetSuite ERP connection (scripts/setup_erp_flow.py) — generated at runtime, so Terraform can't derive it. Empty skips configuring the mock's outbound webhook URL. Update this and re-apply whenever the connection is re-registered."
+  type        = string
+  default     = ""
+}
+
 variable "anthropic_api_key" {
   description = "Anthropic API key for the field-mapping proposer's direct LLM adapter (replaces Bedrock — see ADR-0023). Supply via TF_VAR_anthropic_api_key; stored in Key Vault, never in state after the first apply."
   type        = string
@@ -219,17 +231,17 @@ variable "anthropic_api_key" {
   default     = ""
 }
 
-# Azure Foundry (Claude models) configuration
+# Azure Foundry (mapping-service LLM) configuration
 variable "foundry_model_name" {
-  description = "Claude model to deploy on Foundry (e.g., claude-haiku-5-5, claude-opus-5-5)"
+  description = "OpenAI-format model to deploy on Foundry (e.g., gpt-4o); also the deployment name the app calls"
   type        = string
-  default     = "claude-haiku-5-5"
+  default     = "gpt-4o"
 }
 
 variable "foundry_model_version" {
-  description = "Claude model version (e.g., '2024-12-19' or 'latest')"
+  description = "Model version (gpt-4o: 2024-11-20)"
   type        = string
-  default     = "latest"
+  default     = "2024-11-20"
 }
 
 variable "foundry_api_key" {
@@ -261,8 +273,27 @@ variable "agent_anthropic_api_key" {
   default     = ""
 }
 
+variable "agent_aws_region" {
+  description = "AWS region for the agent's Bedrock auth (if using Bedrock, not a direct Anthropic key). Supply via TF_VAR_agent_aws_region."
+  type        = string
+  default     = ""
+}
+
+variable "agent_aws_bearer_token" {
+  description = "AWS Bedrock bearer token for the agent's claude CLI (CLAUDE_CODE_USE_BEDROCK=1, no Anthropic key needed). Supply via TF_VAR_agent_aws_bearer_token."
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "coding_agent_model" {
   description = "Model the agent uses for code generation (e.g., claude-sonnet-5-5, claude-opus-5-5)"
   type        = string
   default     = "claude-sonnet-5-5"
+}
+
+variable "agent_image" {
+  description = "Full ACR image ref for the agent (repo:tag). Empty uses a bootstrap placeholder until the first push."
+  type        = string
+  default     = ""
 }

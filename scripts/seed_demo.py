@@ -42,7 +42,7 @@ _RESELLER_ENDPOINT_SECRET = "local:reseller-webhook-secret"
 _OUTBOUND_WEBHOOK_SECRET = "whsec_local_dev"
 _RESELLER_MOCK_URL = "http://127.0.0.1:8090/hooks"
 
-_ODOO_URL = "http://localhost:8069"
+_ODOO_URL = os.environ.get("ODOO_URL", "http://localhost:8069")
 _ODOO_DB = "odoo"
 _ODOO_USER = "admin"
 _ODOO_PASSWORD = "admin"
@@ -167,7 +167,7 @@ _STATEMENTS = [
             (connection_id, erp_type, instance_label, base_url, credentials, secret_ref,
              webhook_secret_ref, status)
         VALUES
-            ('conn_odoo_local', 'ODOO', 'Odoo', 'http://localhost:8069',
+            ('conn_odoo_local', 'ODOO', 'Odoo', :odoo_url,
              '{"database":"odoo","username":"admin"}'::jsonb,
              :login_secret, :webhook_secret, 'ACTIVE')
         ON CONFLICT (connection_id) DO UPDATE SET
@@ -256,6 +256,7 @@ def main() -> None:
     erp_customer_id = _seed_odoo()
     engine = create_engine(url, future=True)
     params = {
+        "odoo_url": _ODOO_URL,
         "login_secret": _LOGIN_SECRET,
         "webhook_secret": _WEBHOOK_SECRET,
         "erp_customer_id": erp_customer_id,

@@ -23,7 +23,11 @@ from src.composition import build_container
 from src.shared.config import get_settings
 
 _SECURITY_HEADERS = {
-    "Content-Security-Policy": "default-src 'self'",
+    "Content-Security-Policy": (
+        "default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; "
+        "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+        "img-src 'self' https://fastapi.tiangolo.com"
+    ),
     "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",

@@ -28,10 +28,24 @@ resource "azurerm_container_app" "agent" {
     value = var.registry_admin_password
   }
 
-  # Anthropic API key (or Bedrock token, depending on CLAUDE_CODE_USE_BEDROCK).
-  secret {
-    name  = "anthropic-api-key"
-    value = var.anthropic_api_key
+  # Anthropic API key and the Bedrock bearer token are each optional (Container Apps
+  # rejects a secret with an empty value and no keyVaultUrl, so an unused one must be
+  # left out entirely, not just set to "") -- exactly one of the two is expected, picked
+  # by whichever var is actually non-empty.
+  dynamic "secret" {
+    for_each = var.anthropic_api_key != "" ? [var.anthropic_api_key] : []
+    content {
+      name  = "anthropic-api-key"
+      value = secret.value
+    }
+  }
+
+  dynamic "secret" {
+    for_each = var.aws_bearer_token != "" ? [var.aws_bearer_token] : []
+    content {
+      name  = "aws-bearer-token"
+      value = secret.value
+    }
   }
 
   # GitHub PAT for repo access + PR creation.
@@ -46,7 +60,7 @@ resource "azurerm_container_app" "agent" {
 
     container {
       name   = "agent"
-      image  = "${var.registry_login_server}/erp-agent-service:latest"
+      image  = var.image
       cpu    = 2
       memory = "4Gi"
 
@@ -82,23 +96,36 @@ resource "azurerm_container_app" "agent" {
         name  = "CODING_AGENT_MODEL"
         value = var.coding_agent_model
       }
-      env {
-        name  = "ANTHROPIC_API_KEY"
-        secret_name = "anthropic-api-key"
+
+      dynamic "env" {
+        for_each = var.anthropic_api_key != "" ? [1] : []
+        content {
+          name        = "ANTHROPIC_API_KEY"
+          secret_name = "anthropic-api-key"
+        }
       }
-      # If using Bedrock instead, set:
-      # env {
-      #   name  = "CLAUDE_CODE_USE_BEDROCK"
-      #   value = "1"
-      # }
-      # env {
-      #   name  = "AWS_REGION"
-      #   value = var.aws_region
-      # }
-      # env {
-      #   name  = "AWS_BEARER_TOKEN_BEDROCK"
-      #   secret_name = "aws-bearer-token"
-      # }
+
+      dynamic "env" {
+        for_each = var.aws_bearer_token != "" ? [1] : []
+        content {
+          name  = "CLAUDE_CODE_USE_BEDROCK"
+          value = "1"
+        }
+      }
+      dynamic "env" {
+        for_each = var.aws_bearer_token != "" ? [1] : []
+        content {
+          name  = "AWS_REGION"
+          value = var.aws_region
+        }
+      }
+      dynamic "env" {
+        for_each = var.aws_bearer_token != "" ? [1] : []
+        content {
+          name        = "AWS_BEARER_TOKEN_BEDROCK"
+          secret_name = "aws-bearer-token"
+        }
+      }
     }
   }
 

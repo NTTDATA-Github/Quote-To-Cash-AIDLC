@@ -95,7 +95,7 @@ class PostgresConnectionRepository:
             session.execute(
                 erp_connections_table.update()
                 .where(erp_connections_table.c.connection_id == str(connection.connection_id))
-                .values(status=connection.status.value)
+                .values(status=connection.status.value, instance_label=connection.instance_label)
             )
             session.commit()
         except Exception:

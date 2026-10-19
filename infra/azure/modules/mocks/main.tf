@@ -30,11 +30,24 @@ resource "azurerm_container_app" "mock_netsuite" {
     max_replicas = 1
 
     container {
-      name    = "mock-netsuite"
-      image   = var.mock_netsuite_image
-      cpu     = 0.25
-      memory  = "0.5Gi"
-      command = ["python", "-m", "scripts.mock_netsuite", "--port", "8075"]
+      name   = "mock-netsuite"
+      image  = var.mock_netsuite_image
+      cpu    = 0.25
+      memory = "0.5Gi"
+      command = concat(
+        [
+          "python", "-m", "scripts.mock_netsuite", "--port", "8075",
+          "--account-id", var.netsuite_account_id,
+          "--consumer-key", var.netsuite_consumer_key,
+          "--token-id", var.netsuite_token_id,
+          "--consumer-secret", var.netsuite_consumer_secret,
+          "--token-secret", var.netsuite_token_secret,
+          "--webhook-secret", var.netsuite_webhook_secret,
+        ],
+        var.netsuite_connection_id != "" ? [
+          "--webhook-url", "https://${var.api_fqdn}/erp/webhook/${var.netsuite_connection_id}"
+        ] : []
+      )
     }
   }
 

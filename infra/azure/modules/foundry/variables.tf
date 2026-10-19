@@ -23,14 +23,14 @@ variable "sku_name" {
 
 variable "model_name" {
   type        = string
-  default     = "claude-haiku-5-5"
-  description = "Claude model name to deploy (e.g., claude-haiku-5-5, claude-opus-5-5)"
+  default     = "gpt-4o"
+  description = "OpenAI-format model to deploy; also used as the deployment name"
 }
 
 variable "model_version" {
   type        = string
-  default     = "latest"
-  description = "Model version (e.g., '2024-12-19' or 'latest')"
+  default     = "2024-11-20"
+  description = "Model version (gpt-4o: 2024-11-20)"
 }
 
 variable "foundry_api_key" {

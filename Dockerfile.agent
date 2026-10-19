@@ -1,0 +1,51 @@
+# ERP code-gen agent — FastAPI intake (/runs) + polling worker in one container,
+# since modules/agent/main.tf runs this as a single Container App with one image.
+# Needs git (worktrees/push) and the `claude` CLI (npm) on top of the usual Python base.
+FROM python:3.11-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git curl ca-certificates nodejs npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Same corporate_ca convention as Dockerfile.api — no-op unless the build passes
+# --secret id=corporate_ca,src=<path>.
+RUN --mount=type=secret,id=corporate_ca,target=/usr/local/share/ca-certificates/corporate-ca.crt \
+    if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then \
+      update-ca-certificates && \
+      export PIP_CERT=/etc/ssl/certs/ca-certificates.crt && \
+      npm config set cafile /etc/ssl/certs/ca-certificates.crt; \
+    fi && \
+    npm install -g @anthropic-ai/claude-code
+
+COPY erp-agent-service/requirements.txt ./
+RUN --mount=type=secret,id=corporate_ca,target=/usr/local/share/ca-certificates/corporate-ca.crt \
+    if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then export PIP_CERT=/etc/ssl/certs/ca-certificates.crt; fi && \
+    pip install -r requirements.txt
+
+COPY erp-agent-service/service ./service
+
+RUN useradd --create-home --uid 10001 appuser \
+    && mkdir -p /app/repo-cache /app/worktrees \
+    && chown -R appuser:appuser /app
+USER appuser
+
+# git commit (agent.py's commit_and_push) needs an identity — there's no human user here.
+RUN git config --global user.email "agent@erp-platform.local" \
+    && git config --global user.name "erp-agent"
+
+EXPOSE 8002
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8002/livez || exit 1
+
+# API and the polling worker are two processes sharing one container (see docstring
+# above) — if either dies, `wait -n` returns and the container exits, so Container
+# Apps restarts the whole thing instead of silently running with half the service dead.
+CMD ["sh", "-c", "python -m uvicorn service.app:app --host 0.0.0.0 --port 8002 & python -m service.worker & wait -n"]

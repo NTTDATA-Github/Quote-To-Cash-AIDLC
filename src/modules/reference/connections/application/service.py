@@ -11,7 +11,12 @@ from src.shared.messaging.facts import FactPublisher, make_fact
 from src.shared.types import ConnectionId, generate_id
 
 from ..domain.errors import ConnectionNotFound
-from ..domain.events import CONNECTION_PAUSED, CONNECTION_REGISTERED, CONNECTION_RESUMED
+from ..domain.events import (
+    CONNECTION_PAUSED,
+    CONNECTION_REGISTERED,
+    CONNECTION_RENAMED,
+    CONNECTION_RESUMED,
+)
 from ..domain.models import ConnectionStatus, ErpConnection, normalize_erp_type
 
 if TYPE_CHECKING:
@@ -128,6 +133,19 @@ class ConnectionService:
         connection.status = ConnectionStatus.ACTIVE
         self._repository.update(connection)
         self._publish(connection, CONNECTION_RESUMED)
+        return connection
+
+    def rename(self, connection_id: ConnectionId, instance_label: str) -> ErpConnection:
+        """Cosmetic only — nothing keys off `instance_label` (routing/mapping/webhooks all
+        use `connection_id`), so this never touches anything downstream."""
+        if not instance_label.strip():
+            raise ValueError("instance_label must not be blank")
+        connection = self._repository.get(connection_id)
+        if connection is None:
+            raise ConnectionNotFound(str(connection_id))
+        connection.instance_label = instance_label
+        self._repository.update(connection)
+        self._publish(connection, CONNECTION_RENAMED)
         return connection
 
     def _publish(self, connection: ErpConnection, event_type: str) -> None:

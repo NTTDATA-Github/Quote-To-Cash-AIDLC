@@ -26,6 +26,7 @@ export function TenantsPage() {
   const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]>("all");
 
   const resellerNameById = new Map((resellers ?? []).map((r) => [r.tenantId, r.name]));
+  const webhookUrlsById = new Map((resellers ?? []).map((r) => [r.tenantId, r.webhookUrls.join(", ")]));
 
   const rows = (bindings ?? [])
     .filter((b) => status === "all" || b.status === status)
@@ -42,6 +43,12 @@ export function TenantsPage() {
     },
     { key: "tenantId", header: "Reseller ID", render: (b) => <span className="id">{b.tenantId}</span>, sortValue: (b) => b.tenantId },
     { key: "connection", header: "Connection", render: (b) => b.connectionId, sortValue: (b) => b.connectionId },
+    {
+      key: "webhook",
+      header: "Webhook URL",
+      render: (b) => <span className="mono">{webhookUrlsById.get(b.tenantId) || "—"}</span>,
+      sortValue: (b) => webhookUrlsById.get(b.tenantId) ?? "",
+    },
     { key: "customer", header: "ERP customer ID", render: (b) => <span className="mono">{b.erpCustomerId}</span>, sortValue: (b) => b.erpCustomerId },
     { key: "status", header: "Status", render: (b) => <StatusBadge status={statusLabel(b.status)} />, sortValue: (b) => b.status },
     {
@@ -77,7 +84,7 @@ export function TenantsPage() {
         subtitle="Each reseller has a customer link into every ERP connection it buys from."
         actions={
           <button className="erp-btn erp-btn--primary" type="button" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "Cancel" : "Link reseller to connection"}
+            {showForm ? "Cancel" : "Register reseller"}
           </button>
         }
       />

@@ -67,6 +67,9 @@ if TYPE_CHECKING:
         MappingJob,
     )
     from src.modules.integration.mapping.domain.request_suggestion import SuggestedSampleRequest
+    from src.modules.integration.webhooks_outbound.application.ports import (
+        WebhookEndpointRepository,
+    )
     from src.modules.reference.connections.domain.models import ErpConnection
     from src.modules.reference.tenancy.domain.models import Reseller, TenantConnectionBinding
     from src.modules.sales.ordering.projections.read_models import OperatorOrderView
@@ -151,8 +154,12 @@ def _binding_to_gql(binding: TenantConnectionBinding) -> BindingType:
     )
 
 
-def _reseller_to_gql(reseller: Reseller) -> ResellerType:
-    return ResellerType(tenant_id=str(reseller.tenant_id), name=reseller.name)
+def _reseller_to_gql(reseller: Reseller, endpoints: WebhookEndpointRepository) -> ResellerType:
+    return ResellerType(
+        tenant_id=str(reseller.tenant_id),
+        name=reseller.name,
+        webhook_urls=[e.url for e in endpoints.list_by_tenant(reseller.tenant_id)],
+    )
 
 
 def _company_to_gql(company: Subsidiary) -> SubsidiaryType:
@@ -284,7 +291,10 @@ class Query:
     def resellers(self, info: Info[GraphQLContext, None]) -> list[ResellerType]:
         ctx = info.context
         ctx.require_role("OPERATOR")
-        return [_reseller_to_gql(r) for r in ctx.container.resellers.list_all()]
+        return [
+            _reseller_to_gql(r, ctx.container.webhook_endpoints)
+            for r in ctx.container.resellers.list_all()
+        ]
 
     @strawberry.field
     def subsidiaries(self, info: Info[GraphQLContext, None]) -> list[SubsidiaryType]:
@@ -442,7 +452,7 @@ class Mutation:
         ctx.container.resellers.upsert(TenantId(tenant_id), name)
         reseller = ctx.container.resellers.get(TenantId(tenant_id))
         assert reseller is not None
-        return _reseller_to_gql(reseller)
+        return _reseller_to_gql(reseller, ctx.container.webhook_endpoints)
 
     @strawberry.mutation
     def verify_binding(self, info: Info[GraphQLContext, None], binding_id: str) -> BindingType:
@@ -481,6 +491,25 @@ class Mutation:
             ctx.container.erp_probe,
         )
         connection = service.resume(ConnectionId(connection_id))
+        mapping_status = ctx.container.mapping_service.connection_mapping_status
+        return _connection_to_gql(connection, ctx.container.has_adapter, mapping_status)
+
+    @strawberry.mutation
+    def rename_connection(
+        self, info: Info[GraphQLContext, None], connection_id: str, instance_label: str
+    ) -> ConnectionType:
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        service = ConnectionService(
+            ctx.container.connections,
+            ctx.container.facts,
+            ctx.container.secrets,
+            ctx.container.erp_probe,
+        )
+        try:
+            connection = service.rename(ConnectionId(connection_id), instance_label)
+        except ValueError as e:
+            raise Exception(str(e)) from e
         mapping_status = ctx.container.mapping_service.connection_mapping_status
         return _connection_to_gql(connection, ctx.container.has_adapter, mapping_status)
 

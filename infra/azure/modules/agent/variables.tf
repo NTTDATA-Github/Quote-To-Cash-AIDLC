@@ -24,6 +24,11 @@ variable "registry_admin_password" {
   sensitive = true
 }
 
+variable "image" {
+  type        = string
+  description = "Full ACR image ref for the agent (repo:tag)."
+}
+
 variable "target_repo_url" {
   type        = string
   description = "Git repo URL the agent clones and opens PRs against (e.g., https://github.com/.../...)"

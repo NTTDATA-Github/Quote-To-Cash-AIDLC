@@ -24,14 +24,16 @@ _CSV = "field,description\norder_id,The order id\ncustomer_name,Who placed it\n"
 
 
 def _service_with_connection(
-    *, has_adapter=lambda _erp_type: False
+    *,
+    has_adapter=lambda _erp_type: False,
+    erp_type="SHOPIFY",
 ) -> tuple[SampleRequestSuggestionService, str]:
     connections = InMemoryConnectionRepository()
     connection_id = ConnectionId("conn_shopify_1")
     connections.add(
         ErpConnection(
             connection_id=connection_id,
-            erp_type="SHOPIFY",
+            erp_type=erp_type,
             instance_label="Shopify store",
             base_url="http://erp.example.invalid",
             credentials={},

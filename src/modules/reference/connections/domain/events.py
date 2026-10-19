@@ -6,3 +6,4 @@ from __future__ import annotations
 CONNECTION_REGISTERED = "ConnectionRegistered"
 CONNECTION_PAUSED = "ConnectionPaused"
 CONNECTION_RESUMED = "ConnectionResumed"
+CONNECTION_RENAMED = "ConnectionRenamed"

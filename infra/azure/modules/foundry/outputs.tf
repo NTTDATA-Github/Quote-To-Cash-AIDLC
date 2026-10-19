@@ -1,5 +1,5 @@
 output "foundry_endpoint" {
-  description = "Azure Foundry endpoint URL for Claude API calls"
+  description = "Azure Foundry endpoint URL"
   value       = azurerm_cognitive_account.foundry.endpoint
 }
 
@@ -9,6 +9,6 @@ output "foundry_account_name" {
 }
 
 output "deployment_name" {
-  description = "Claude model deployment name (use as model_id in client)"
-  value       = azurerm_cognitive_deployment.claude.name
+  description = "Model deployment name (use as model_id in the LLM client)"
+  value       = azurerm_cognitive_deployment.model.name
 }

@@ -42,6 +42,7 @@ export interface Subsidiary {
 export interface Reseller {
   tenantId: string;
   name: string;
+  webhookUrls: string[];
 }
 
 export interface OperatorOrderLine {
@@ -94,7 +95,7 @@ export const SUBSIDIARIES_QUERY = /* GraphQL */ `
 
 export const RESELLERS_QUERY = /* GraphQL */ `
   query Resellers {
-    resellers { tenantId name }
+    resellers { tenantId name webhookUrls }
   }
 `;
 

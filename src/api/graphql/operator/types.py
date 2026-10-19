@@ -113,6 +113,7 @@ class BindingType:
 class ResellerType:
     tenant_id: str
     name: str
+    webhook_urls: list[str]
 
 
 @strawberry.type

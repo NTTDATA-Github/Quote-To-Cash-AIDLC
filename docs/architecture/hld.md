@@ -2,13 +2,14 @@
 
 C4 **container-level** view. Diagram source: [`hld.drawio`](hld.drawio) (open in
 diagrams.net or the VS Code Draw.io extension). It has **three pages**: *(1) Container
-view*, *(2) Onboarding and ERP routing*, and *(3) Infrastructure / Deployment (AWS)* —
-the Terraform-provisioned topology: VPC, ALB, ECS Fargate, Aurora, Odoo's own
-ALB+RDS+cluster, ECR, S3+CloudFront for the UI, and the one-time GitHub OIDC
-bootstrap. Page 3 is deployment detail deliberately left out of page 1; for the
-decisions and known gaps behind it (public access, IAM scope, image rebuild rules),
-see [ADR-0020](../adr/0020-terraform-aws-deploy-and-cicd.md) and
-[`docs/deploy-aws.md`](../deploy-aws.md) rather than duplicating them here. The
+view*, *(2) Onboarding and ERP routing*, and *(3) Infrastructure / Deployment (Azure)* —
+the Terraform-provisioned topology: VNet, Container Apps environment, Postgres Flexible
+Server, Odoo's own Container App + its own Postgres Flexible Server, Azure Container
+Registry, Storage + Front Door for the UI, and the one-time Entra OIDC bootstrap. Page 3
+is deployment detail deliberately left out of page 1; for the decisions and known gaps
+behind it (public access, identity scope, image rebuild rules), see
+[ADR-0023](../adr/0023-azure-migration.md) and
+[`docs/deploy-azure.md`](../deploy-azure.md) rather than duplicating them here. The
 known-gaps table below is for the application architecture (pages 1–2).
 
 Scope: major components, their responsibilities, external dependencies, data stores,
@@ -29,20 +30,21 @@ Interacting parties and systems:
 - **ERP (Odoo)** — external system of record. Another Odoo database is another
   connection. A different ERP product needs an adapter (only Odoo is registered today).
 - **Reseller webhook endpoints** — external receivers AdminOps's worker posts status to.
-- **AWS Cognito** (identity) and **AWS Secrets Manager** (credentials) — managed deps.
+- **Keycloak** (identity) and **Azure Key Vault** (credentials) — managed deps.
 
 ## Container / component overview
 
 | Component | Purpose / responsibility | Key dependencies |
 |---|---|---|
-| **AdminOps (SPA)** | The only browser app. Lists every order, every reseller notification, connections, subsidiaries, bindings, and failed messages. | API host (GraphQL /operator); Cognito |
-| **API host** *(Python/FastAPI — the only HTTP server)* | Synchronous interface: GraphQL for AdminOps, the inbound ERP-webhook HTTP route, request authentication/authorization, and reads/writes via the domain. A reseller GraphQL schema remains for machines; it is not a screen. | Domain modules; PostgreSQL; Cognito; Secrets Manager |
-| **Worker host** *(Python process — not HTTP, not FastAPI)* | Asynchronous processing: order routing, ERP delivery, read-model projection, outbound webhook dispatch, outbox relay, and the reconciliation scheduler (polling fallback). Same codebase/composition root as the API, different entrypoint. | Message bus; Domain modules; PostgreSQL; ERP; Secrets Manager |
+| **AdminOps (SPA)** | The only browser app. Lists every order, every reseller notification, connections, subsidiaries, bindings, and failed messages. | API host (GraphQL /operator); Keycloak |
+| **API host** *(Python/FastAPI — the only HTTP server)* | Synchronous interface: GraphQL for AdminOps, the inbound ERP-webhook HTTP route, request authentication/authorization, and reads/writes via the domain. A reseller GraphQL schema remains for machines; it is not a screen. | Domain modules; PostgreSQL; Keycloak; Azure Key Vault |
+| **Worker host** *(Python process — not HTTP, not FastAPI)* | Asynchronous processing: order routing, ERP delivery, read-model projection, outbound webhook dispatch, outbox relay, and the reconciliation scheduler (polling fallback). Same codebase/composition root as the API, different entrypoint. | Message bus; Domain modules; PostgreSQL; ERP; Azure Key Vault; Azure AI Foundry |
 | **Domain modules** (shared) | The business logic shared by API + Worker, grouped by subdomain (ADR-0017): **`sales/`** (`ordering` — the event-sourced core — plus `quoting`, `shipment`, `invoicing`), **`reference/`** (`catalog`, `connections`, `tenancy`), **`integration/`** (`erp` adapters + registry, inbound/outbound `webhooks`). | PostgreSQL (via hosts) |
-| **PostgreSQL (Aurora)** | Single datastore: event store + outbox + snapshots, order projections (read models), and reference/CRUD data. | — (owned by the domain) |
-| **Message bus** | Async transport: SNS FIFO topic → SQS FIFO queues (+ DLQ). floci locally, AWS in prod. | — |
-| **AWS Cognito** | Identity provider (JWT); header-stub provider for local dev. | — |
-| **AWS Secrets Manager** | Stores ERP login and webhook signing secrets (never persisted in the DB). | — |
+| **PostgreSQL (Azure Postgres Flexible Server)** | Single datastore: event store + outbox + snapshots, order projections (read models), and reference/CRUD data. | — (owned by the domain) |
+| **Message bus** | Async transport: Azure Service Bus topic → per-consumer subscriptions (+ DLQ). floci locally, Azure Service Bus in prod. | — |
+| **Keycloak** | Identity provider (JWT); header-stub provider for local dev. | — |
+| **Azure Key Vault** | Stores ERP login and webhook signing secrets (never persisted in the DB). | — |
+| **Azure AI Foundry** | gpt-4o deployment used only by the mapping proposer to draft an ERP field mapping; never in the order-sync path. | — |
 | **ERP — Odoo** (external) | System of record. Sales writes the quotation here. The worker reads it, then deliveries and invoices. | — |
 | **Reseller webhook endpoints** (external) | Reseller-operated receivers for signed status notifications. | — |
 
@@ -65,7 +67,7 @@ Interacting parties and systems:
    company id), and reseller bindings. The distributor signs in as the operator role.
 
 4. **Authentication** *(sync)*
-   AdminOps obtains a JWT from Cognito. The operator schema requires the operator role
+   AdminOps obtains a JWT from Keycloak. The operator schema requires the operator role
    and returns every reseller's orders and notifications.
 
 ## Data ownership
@@ -79,8 +81,8 @@ Interacting parties and systems:
   (ADR-0014); reference/config data is plain CRUD.
 - **API** publishes order events (writes events + outbox); **Worker** consumes events and
   owns projection writes. **ERP (Odoo)** owns the authoritative order record on its side;
-  AdminOps mirrors status back via projections. Secrets are owned by **Secrets
-  Manager**, identities by **Cognito**.
+  AdminOps mirrors status back via projections. Secrets are owned by **Azure Key
+  Vault**, identities by **Keycloak**.
 
 ### Module → table ownership (see diagram page 2)
 
@@ -111,18 +113,18 @@ Modules are grouped by subdomain (ADR-0017): `sales/`, `reference/`, `integratio
   (FR-19). AdminOps is the distributor view and shows it, including which reseller a
   notification was sent to.
 - **Product boundary** — AdminOps, API, Worker, and domain.
-- **Cloud (AWS) boundary** — Cognito, Secrets Manager, SNS/SQS, Aurora, and the Fargate
-  runtimes are AWS-managed.
+- **Cloud (Azure) boundary** — Keycloak, Key Vault, Service Bus, Postgres Flexible
+  Server, and the Container Apps runtimes are Azure-managed.
 - **External boundary** — the ERP and reseller webhook endpoints are third-party controlled.
 
 ## Deployment / runtime boundaries
 
-- **API host** and **Worker host** are separate deployables (containers, ECS Fargate in
+- **API host** and **Worker host** are separate deployables (Azure Container Apps in
   the target architecture) so the synchronous and asynchronous workloads scale
   independently; the Worker is further role-splittable (routing / delivery / projections /
   dispatch / relay / reconcile).
 - **Local/dev** runs the same code with an in-memory bus and (optionally) floci standing
-  in for AWS; **prod** uses the AWS services above.
+  in for Azure; **prod** uses the Azure services above.
 
 ## Known gaps (honest review, 2026-10-04)
 
@@ -139,8 +141,8 @@ The diagram no longer carries a separate gaps page. The table below is the list.
 
 ## Non-functional considerations (architecturally significant)
 
-- **Security** — JWT auth (Cognito) + per-request tenant/role scoping; secrets only in
-  Secrets Manager (never the DB); inbound webhooks authenticated (shared-secret/HMAC);
+- **Security** — JWT auth (Keycloak) + per-request tenant/role scoping; secrets only in
+  Azure Key Vault (never the DB); inbound webhooks authenticated (shared-secret/HMAC);
   outbound webhooks HMAC-signed; FR-19 reseller/ERP data isolation; RLS available in the
   DB for defense in depth.
 - **Reliability / consistency** — each aggregate's events + outbox rows are written in one
@@ -153,7 +155,8 @@ The diagram no longer carries a separate gaps page. The table below is the list.
   latency/outages via the queue; single Postgres today (read-model/replica scaling: TBD).
 - **Observability** — structured logging across API/Worker; delivery log + failed-message
   views in AdminOps. Metrics/tracing stack: **TBD**.
-- **Availability / DR** — managed AWS services (Aurora, SQS, Cognito). Multi-AZ/region
-  topology, RPO/RTO targets, and backup/restore policy: **TBD**.
+- **Availability / DR** — managed Azure services (Postgres Flexible Server, Service Bus,
+  Keycloak on Container Apps). Multi-region topology, RPO/RTO targets, and backup/restore
+  policy: **TBD**.
 - **Performance** — reads served from projections (CQRS) rather than replaying events;
   specific latency/throughput targets: **TBD**.

@@ -55,6 +55,13 @@ _DEDUPE_SCAN_LIMIT = 10_000
 # Non-terminal, or terminal-but-approved — either means "already spoken for."
 _BLOCKING_STATUSES = (MappingStatus.PENDING, MappingStatus.PROCESSING)
 
+# Onboarded through their own dedicated flow (see docs/netsuite-registration-guide.md),
+# not the generic LLM mapper — deliberately separate from `has_adapter`, which must keep
+# meaning "does real delivery code exist" and nothing else. Without this, blocking
+# NetSuite here would piggyback on the has_adapter check and misreport the reason as
+# "already has a working adapter."
+_MAPPER_BLOCKED_ERP_TYPES = frozenset({"NETSUITE"})
+
 
 class MappingService:
     def __init__(

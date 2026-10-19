@@ -66,11 +66,11 @@ output "mock_reseller_url" {
 }
 
 output "foundry_endpoint" {
-  description = "Azure Foundry endpoint for Claude API calls (set FOUNDRY_ENDPOINT in API/worker env)"
+  description = "Azure Foundry endpoint (set FOUNDRY_ENDPOINT in API/worker env)"
   value       = module.foundry.foundry_endpoint
 }
 
 output "agent_service_url" {
-  description = "Agent service URL for HttpAdapterRunLauncher (set AGENT_SERVICE_URL in API/worker env)"
-  value       = module.agent.agent_service_url
+  description = "Agent service URL for HttpAdapterRunLauncher (set AGENT_SERVICE_URL in API/worker env). Empty when module.agent is skipped (no tokens supplied)."
+  value       = try(module.agent[0].agent_service_url, "")
 }

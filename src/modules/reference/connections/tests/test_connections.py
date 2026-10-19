@@ -7,6 +7,7 @@ from src.modules.reference.connections.domain.errors import ConnectionNotFound
 from src.modules.reference.connections.domain.events import (
     CONNECTION_PAUSED,
     CONNECTION_REGISTERED,
+    CONNECTION_RENAMED,
     CONNECTION_RESUMED,
 )
 from src.modules.reference.connections.domain.models import ConnectionStatus
@@ -60,6 +61,37 @@ def test_register_pause_resume_each_publish_a_fact_without_leaking_secrets() -> 
         assert fact.payload["connection_id"] == str(conn.connection_id)
         assert "secret_ref" not in fact.payload
         assert "username" not in fact.payload
+
+
+def test_rename_updates_the_label_and_publishes_a_fact() -> None:
+    svc = _service()
+    facts: CollectingFactPublisher = svc._facts  # type: ignore[attr-defined]
+    conn = svc.register(
+        erp_type="ODOO",
+        instance_label="Odoo AWS POC",
+        base_url="http://odoo:8069",
+        credentials={},
+        secret=None,
+    )
+    renamed = svc.rename(conn.connection_id, "Odoo")
+    assert renamed.instance_label == "Odoo"
+    assert svc.get(conn.connection_id).instance_label == "Odoo"  # type: ignore[union-attr]
+    assert facts.published[-1].event_type == CONNECTION_RENAMED
+
+
+def test_rename_rejects_a_blank_label_and_an_unknown_connection() -> None:
+    svc = _service()
+    conn = svc.register(
+        erp_type="ODOO",
+        instance_label="Odoo",
+        base_url="http://odoo:8069",
+        credentials={},
+        secret=None,
+    )
+    with pytest.raises(ValueError, match="blank"):
+        svc.rename(conn.connection_id, "   ")
+    with pytest.raises(ConnectionNotFound):
+        svc.rename(ConnectionId("conn_nope"), "New name")
 
 
 def test_secret_is_generated_into_a_reference_not_stored_raw() -> None:

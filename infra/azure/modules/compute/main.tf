@@ -15,6 +15,15 @@ locals {
   # module.keycloak needs module.compute.environment_id, so module.compute can't also
   # depend on module.keycloak.realm_url.
   keycloak_issuer = "https://${var.prefix}-keycloak.${azurerm_container_app_environment.main.default_domain}/realms/o2c"
+
+  # Same reasoning, same fix, for module.agent: it also needs module.compute.environment_id,
+  # so this can't be `module.agent[0].agent_service_url` without a cycle. Every app in one
+  # Container App Environment shares this same default_domain regardless of external_enabled
+  # (that flag only scopes who can reach it, not the DNS name) -- matches modules/agent's
+  # own `name = "${var.prefix}-agent"` and internal-only ingress.
+  # https, not http: modules/agent sets allow_insecure_connections = false on its
+  # ingress, so the edge only accepts TLS even though it's internal-only.
+  agent_service_url = "https://${var.prefix}-agent.${azurerm_container_app_environment.main.default_domain}"
 }
 
 resource "azurerm_container_app" "api" {
@@ -75,6 +84,10 @@ resource "azurerm_container_app" "api" {
       env {
         name  = "KEYCLOAK_CLIENT_ID"
         value = "o2c-portal"
+      }
+      env {
+        name  = "AGENT_SERVICE_URL"
+        value = local.agent_service_url
       }
 
       liveness_probe {
@@ -170,6 +183,10 @@ resource "azurerm_container_app" "worker" {
       env {
         name  = "KEYCLOAK_CLIENT_ID"
         value = "o2c-portal"
+      }
+      env {
+        name  = "AGENT_SERVICE_URL"
+        value = local.agent_service_url
       }
     }
   }

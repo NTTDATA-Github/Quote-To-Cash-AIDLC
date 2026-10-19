@@ -154,7 +154,7 @@ export function OverviewPage() {
         <StatTile to="/admin/orders?stage=in-flight" icon={Activity} tone="progress" value={inFlight} label="In flight" hint="Open or confirmed" />
         <StatTile to="/admin/orders?stage=completed" icon={PackageCheck} tone="success" value={completed} label="Completed" hint="Closed" />
         <StatTile
-          to="/admin/failed-messages"
+          to="/admin/conflict-resolution"
           icon={AlertTriangle}
           tone={attention.length ? "danger" : "success"}
           value={attention.length}

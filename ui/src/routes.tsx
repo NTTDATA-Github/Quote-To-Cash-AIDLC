@@ -10,7 +10,7 @@ import { TenantsPage } from "./features/admin/TenantsPage";
 import { SubsidiariesPage } from "./features/admin/SubsidiariesPage";
 import { OrdersPage as OperatorOrdersPage } from "./features/admin/OrdersPage";
 import { OrderDetailPage as OperatorOrderDetailPage } from "./features/admin/OrderDetailPage";
-import { FailedMessagesPage } from "./features/admin/FailedMessagesPage";
+import { ConflictResolutionPage } from "./features/admin/ConflictResolutionPage";
 import { MappingsPage } from "./features/admin/MappingsPage";
 import { OrderEventsPage } from "./features/events/OrderEventsPage";
 
@@ -21,7 +21,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 }
 
 function HomeRedirect() {
-  return <Navigate to="/admin/overview" replace />;
+  return <Navigate to="/admin/connections" replace />;
 }
 
 function OrderRedirect() {
@@ -57,7 +57,7 @@ export const router = createBrowserRouter([
       { path: "admin/connections", element: <ConnectionsPage /> },
       { path: "admin/mappings", element: <MappingsPage /> },
       { path: "admin/tenants", element: <TenantsPage /> },
-      { path: "admin/failed-messages", element: <FailedMessagesPage /> },
+      { path: "admin/conflict-resolution", element: <ConflictResolutionPage /> },
     ],
   },
 ]);

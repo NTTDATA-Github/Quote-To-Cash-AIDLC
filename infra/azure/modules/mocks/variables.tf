@@ -41,3 +41,59 @@ variable "mock_reseller_secret" {
   sensitive = true
   default   = "whsec_mock_dev"
 }
+
+# Same demo-credential convention as mock_reseller_secret above: these match whatever
+# was typed into registerConnection's auth.params/secret for the NetSuite connection
+# (scripts/setup_erp_flow.py). Passing them here turns the mock's OAuth 1.0a check ON
+# (mock_netsuite.py: verify = consumer_secret is not None and token_secret is not None),
+# so it actually re-verifies the platform's signature instead of accepting any header.
+variable "netsuite_account_id" {
+  type    = string
+  default = "TSTDRV123"
+}
+
+variable "netsuite_consumer_key" {
+  type    = string
+  default = "ck_demo"
+}
+
+variable "netsuite_token_id" {
+  type    = string
+  default = "ti_demo"
+}
+
+variable "netsuite_consumer_secret" {
+  type      = string
+  sensitive = true
+  default   = "cs_demo"
+}
+
+variable "netsuite_token_secret" {
+  type      = string
+  sensitive = true
+  default   = "ts_demo"
+}
+
+# The live api Container App's hostname, for building the mock's outbound webhook URL.
+variable "api_fqdn" {
+  type = string
+}
+
+# Connection id the mock's webhooks target (`POST /erp/webhook/{connection_id}`) — the
+# id `registerConnection` returned when the NetSuite connection was created (it's
+# generated at runtime, not something Terraform can know). Blank skips passing
+# --webhook-url at all (mock_netsuite.py falls back to its unreachable 127.0.0.1
+# default, so webhooks just silently fail — fine until a connection exists to point at).
+variable "netsuite_connection_id" {
+  type    = string
+  default = ""
+}
+
+# Must equal the "netsuite-webhook-secret" value in Key Vault (connections.service's
+# webhook_secret_ref is resolved from there, never from this container's own config) —
+# mock_netsuite.py's built-in default, so leaving this unset on both sides still matches.
+variable "netsuite_webhook_secret" {
+  type      = string
+  sensitive = true
+  default   = "ns-webhook-demo"
+}

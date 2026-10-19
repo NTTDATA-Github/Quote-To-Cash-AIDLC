@@ -294,12 +294,16 @@ def _salesorder_json(txn: _Transaction) -> dict[str, Any]:
     }
 
 
-def push_webhook(url: str, secret: str, erp_order_id: str, status: str) -> None:
+def push_webhook(
+    url: str, secret: str, erp_order_id: str, status: str, *, erp_type: str = "NETSUITE"
+) -> None:
     """POST the same HMAC webhook a SuiteScript user-event would send. The body is an id
-    plus the sales-order status; shipment and invoice lines are read back by the platform."""
+    plus the sales-order status; shipment and invoice lines are read back by the platform.
+    `erp_type` is overridable so other mock ERPs (e.g. `scripts/mock_sap.py`) can reuse
+    this instead of duplicating it — the HMAC shape itself isn't NetSuite-specific."""
     body = json.dumps(
         {
-            "erp_type": "NETSUITE",
+            "erp_type": erp_type,
             "erp_order_id": erp_order_id,
             "status": status,
             "event_id": f"{erp_order_id}-{status}-{time.time_ns()}",
@@ -706,8 +710,10 @@ def main() -> None:
         webhook_url=args.webhook_url,
         webhook_secret=args.webhook_secret,
     )
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
-    print(f"NetSuite SuiteTalk REST service listening on http://127.0.0.1:{args.port}", flush=True)
+    # 0.0.0.0 so Container Apps ingress can reach the process. 127.0.0.1 is only
+    # reachable inside the container, which makes Azure return 503 connection refused.
+    server = ThreadingHTTPServer(("0.0.0.0", args.port), handler)
+    print(f"NetSuite SuiteTalk REST service listening on http://0.0.0.0:{args.port}", flush=True)
     print(f"Swagger UI http://127.0.0.1:{args.port}/docs", flush=True)
     try:
         server.serve_forever()

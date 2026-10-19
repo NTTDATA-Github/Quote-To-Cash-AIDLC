@@ -19,18 +19,6 @@ import type { HeaderSlot } from "./components/PageHeader";
 
 const ADMIN_NAV: { label: string; items: { to: string; label: string; icon: LucideIcon }[] }[] = [
   {
-    label: "Overview",
-    items: [{ to: "/admin/overview", label: "Dashboard", icon: LayoutDashboard }],
-  },
-  {
-    label: "Operations",
-    items: [
-      { to: "/admin/orders", label: "Orders", icon: ShoppingCart },
-      { to: "/admin/notifications", label: "Notifications", icon: Bell },
-      { to: "/admin/failed-messages", label: "Failed messages", icon: AlertTriangle },
-    ],
-  },
-  {
     label: "Settings",
     items: [
       { to: "/admin/connections", label: "ERP connections", icon: Plug },
@@ -38,6 +26,18 @@ const ADMIN_NAV: { label: string; items: { to: string; label: string; icon: Luci
       { to: "/admin/tenants", label: "Resellers", icon: Users },
       { to: "/admin/mappings", label: "ERP mapping", icon: Workflow },
     ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { to: "/admin/orders", label: "Orders", icon: ShoppingCart },
+      { to: "/admin/notifications", label: "Notifications", icon: Bell },
+      { to: "/admin/conflict-resolution", label: "Conflict resolution", icon: AlertTriangle },
+    ],
+  },
+  {
+    label: "Overview",
+    items: [{ to: "/admin/overview", label: "Dashboard", icon: LayoutDashboard }],
   },
 ];
 

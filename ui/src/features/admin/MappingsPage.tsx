@@ -352,6 +352,22 @@ export function MappingsPage() {
     { value: "FAILED", label: "Failed", count: jobCounts.FAILED, dot: "danger" },
   ];
 
+  const mappingColumns: Column<MappingEntry>[] = [
+    { key: "erp", header: "ERP field", sortValue: (m) => m.erpField, render: (m) => <span className="id">{m.erpField}</span> },
+    { key: "ours", header: "Order field", sortValue: (m) => m.canonicalField, render: (m) => <b>{m.canonicalField}</b> },
+    { key: "example", header: "Example", render: (m) => m.sampleData || "—" },
+    {
+      key: "confidence",
+      header: "Confidence",
+      align: "right",
+      sortValue: (m) => m.confidence,
+      render: (m) => {
+        const tier = confidenceTier(m.confidence);
+        return <span className={`erp-badge erp-badge--${tier.role}`}>{m.confidence}%</span>;
+      },
+    },
+  ];
+
   const jobColumns: Column<MappingJob>[] = [
     {
       key: "when",
@@ -851,6 +867,24 @@ export function MappingsPage() {
           )}
         </aside>
       </div>
+
+      {job?.status === "DONE" && mapping.length > 0 && (
+        <section className="panel stack">
+          <div className="panel-head">
+            <h2>
+              Field mapping &mdash; full table{" "}
+              <InfoTag text="Every proposed field for the selected job, sorted worst-confidence first. Click a column header to sort." />
+            </h2>
+          </div>
+          <DataTable
+            columns={mappingColumns}
+            rows={sortedMapping}
+            rowKey={(m) => m.erpField}
+            emptyMessage="No fields proposed."
+            pageSize={20}
+          />
+        </section>
+      )}
     </>
   );
 }

@@ -14,7 +14,7 @@ interface KanbanColumnDef {
 // from the ERP (OrderObserved -> SENT_TO_ERP), so the old push-flow states (Submitted,
 // Validated, Accepted) never show up live and aren't columns here. Exception states
 // (Rejected/Retrying/Cancelled) aren't shown either — they already have a dedicated view
-// on Failed messages.
+// on Conflict resolution.
 const COLUMNS: KanbanColumnDef[] = [
   { key: "open", label: "Open", statuses: ["SENT_TO_ERP"] },
   { key: "confirmed", label: "Confirmed", statuses: ["CONFIRMED"] },

@@ -52,7 +52,7 @@ const STEPS: Step[] = [
   },
   {
     icon: AlertTriangle,
-    title: "7. Failed messages",
+    title: "7. Conflict resolution",
     body: "Orders that could not be delivered to an ERP, or were cancelled. Most retrying ones resolve on their own — this is where to look when one doesn't.",
   },
   {

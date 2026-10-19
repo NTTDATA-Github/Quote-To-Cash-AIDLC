@@ -125,6 +125,13 @@ class ServiceBusConsumerRunner:
         from azure.servicebus import NEXT_AVAILABLE_SESSION
         from azure.servicebus.exceptions import OperationTimeoutError, ServiceBusError
 
+        # get_subscription_receiver() only builds a lazy receiver object — it doesn't open
+        # a connection by itself. The actual AMQP open + session lock happens on __enter__
+        # (the `with receiver:` below), which is where "no session has a message ready
+        # right now" actually surfaces in practice. Both are covered by the same try here
+        # (not just around construction) — catching only the construction call meant every
+        # empty poll crashed the thread with OperationTimeoutError instead of returning 0.
+        processed = 0
         try:
             receiver = self._client.get_subscription_receiver(
                 topic_name=self._topic_name,
@@ -132,26 +139,24 @@ class ServiceBusConsumerRunner:
                 session_id=NEXT_AVAILABLE_SESSION,
                 max_wait_time=self._max_wait_seconds,
             )
+            with receiver:
+                for message in receiver.receive_messages(max_wait_time=self._max_wait_seconds):
+                    event = from_json(str(message))
+                    try:
+                        self._handler(event)
+                    except Exception:
+                        log.exception(
+                            "handler failed for event_id=%s event_type=%s; left for redrive",
+                            event.event_id,
+                            event.event_type,
+                        )
+                        receiver.abandon_message(message)
+                        processed += 1
+                        continue
+                    receiver.complete_message(message)
+                    processed += 1
         except (OperationTimeoutError, ServiceBusError):
             return 0  # no session has a message ready right now — same as an empty SQS poll
-
-        processed = 0
-        with receiver:
-            for message in receiver.receive_messages(max_wait_time=self._max_wait_seconds):
-                event = from_json(str(message))
-                try:
-                    self._handler(event)
-                except Exception:
-                    log.exception(
-                        "handler failed for event_id=%s event_type=%s; left for redrive",
-                        event.event_id,
-                        event.event_type,
-                    )
-                    receiver.abandon_message(message)
-                    processed += 1
-                    continue
-                receiver.complete_message(message)
-                processed += 1
         return processed
 
     def run_forever(self) -> None:  # pragma: no cover - long-running loop

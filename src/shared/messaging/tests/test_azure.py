@@ -140,6 +140,36 @@ def test_poll_once_returns_zero_when_no_session_is_ready() -> None:
     assert runner.poll_once() == 0
 
 
+def test_poll_once_returns_zero_when_no_session_is_ready_on_enter() -> None:
+    """The real production failure mode (confirmed against a live deployment): the SDK
+    doesn't raise OperationTimeoutError from get_subscription_receiver() itself (that just
+    builds a lazy object) -- it raises from __enter__, when the AMQP open actually runs.
+    A try/except around construction only (not around `with receiver:` too) let this
+    crash the consumer thread on every empty poll instead of returning 0."""
+    from azure.servicebus.exceptions import OperationTimeoutError
+
+    class _ReceiverThatTimesOutOnEnter:
+        def __enter__(self) -> None:
+            raise OperationTimeoutError()
+
+        def __exit__(self, *_exc: object) -> None:
+            return None
+
+    class _ClientWithEnterFailure:
+        def get_subscription_receiver(self, **_kwargs: object) -> _ReceiverThatTimesOutOnEnter:
+            return _ReceiverThatTimesOutOnEnter()
+
+    runner = ServiceBusConsumerRunner(
+        "ns.servicebus.windows.net",
+        "platform-domain-events",
+        "order-processing",
+        lambda _event: None,
+        client=_ClientWithEnterFailure(),
+    )
+
+    assert runner.poll_once() == 0
+
+
 def test_poll_once_abandons_the_message_on_handler_failure() -> None:
     from src.shared.messaging.envelope import to_json
 

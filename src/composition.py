@@ -584,15 +584,16 @@ def _llm_client(settings: Settings, secrets: SecretStore) -> LlmClient:
     it's read from Key Vault through the same `SecretStore` port everything else uses.
 
     Cloud-agnostic provider selection: `mapping_llm_provider` (if set) overrides the
-    general `llm_provider`. When not set, defaults to foundry (if available), else
-    anthropic (azure), else bedrock (aws).
+    general `llm_provider`. When not set, defaults to openai (if a Foundry endpoint is
+    configured — infra/azure deploys an OpenAI-format model there), else anthropic
+    (azure), else bedrock (aws). "foundry" (Claude via Foundry) must be chosen explicitly.
     """
     provider = settings.mapping_llm_provider
     if not provider:
         provider = settings.llm_provider
     if not provider:
         provider = (
-            "foundry"
+            "openai"
             if settings.foundry_endpoint
             else ("anthropic" if settings.cloud_provider == "azure" else "bedrock")
         )
@@ -622,9 +623,10 @@ def _llm_client(settings: Settings, secrets: SecretStore) -> LlmClient:
             model_id=settings.mapping_anthropic_model,
         )
     elif provider == "anthropic":
-        return AnthropicLlmClient(
-            settings.mapping_anthropic_model, api_key=secrets.get_secret("anthropic-api-key")
-        )
+        import os
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY") or secrets.get_secret("anthropic-api-key")
+        return AnthropicLlmClient(settings.mapping_anthropic_model, api_key=api_key)
     elif provider == "bedrock":
         return BedrockLlmClient(settings.mapping_bedrock_model_id, settings.aws_region)
     else:
