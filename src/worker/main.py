@@ -1,25 +1,25 @@
-"""Worker entrypoint (postgres/AWS deployment).
+"""Worker entrypoint (postgres/Azure deployment).
 
 Builds the postgres-profile container (same composition root as the API), then starts:
-- one `SqsConsumerRunner` per queue (order-processing / order-delivery / projections /
-  webhook-dispatch), each handler wrapped so it dedupes on `event_id` via
+- one `ServiceBusConsumerRunner` per subscription (order-processing / order-delivery /
+  projections / webhook-dispatch), each handler wrapped so it dedupes on `event_id` via
   `processed_events` BEFORE calling into the module handler — the handler itself only has
   to be correct, not idempotent (item A's carried-forward note: the projection store's
   own conflict-handling is a second line of defense, not a substitute for this).
-- the outbox `RelayRunner` (Postgres outbox -> SNS FIFO topic).
+- the outbox `RelayRunner` (Postgres outbox -> Service Bus topic).
 - the `ReconcileScheduler` (periodic fallback sweep for missed webhooks).
 
-`webhook-dispatch.fifo` now has a consumer (`container.webhook_dispatcher.handle`) —
+`webhook-dispatch` now has a consumer (`container.webhook_dispatcher.handle`) —
 outbound webhooks are still secondary to GraphQL as the primary read path, but the queue
 is no longer just provisioned-and-idle: a reseller-registered endpoint actually gets
 called. `WebhookDispatchService` raises for redrive itself (mirroring `DeliveryHandler`),
 so this consumer needs no special handling beyond the same dedupe wrapper as the others.
 
 Not built: per-connection circuit breaker (plan item C mentions it; deferred — a
-transient ERP failure today just raises `DeliveryRetry`, which the SQS redrive/backoff
-already turns into bounded retries. A breaker that trips PER CONNECTION and short-circuits
-without hitting the ERP is real, separable follow-up work, not needed to get the async
-pipeline running end-to-end).
+transient ERP failure today just raises `DeliveryRetry`, which the Service Bus redelivery/
+backoff already turns into bounded retries. A breaker that trips PER CONNECTION and
+short-circuits without hitting the ERP is real, separable follow-up work, not needed to
+get the async pipeline running end-to-end).
 """
 
 from __future__ import annotations
@@ -29,14 +29,12 @@ import signal
 import threading
 from typing import TYPE_CHECKING
 
-import boto3
 from sqlalchemy import Column, MetaData, String, Table, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from src.composition import build_container
 from src.modules.integration.mapping.application.processing import process_pending_jobs
 from src.shared.config import get_settings
-from src.shared.messaging.aws import SnsFifoPublisher, SqsConsumerRunner
 from src.shared.messaging.azure import ServiceBusConsumerRunner, ServiceBusPublisher
 from src.shared.persistence.engine import get_session_factory
 from src.shared.persistence.relay import OutboxRelay
@@ -107,10 +105,6 @@ def _dedupe(consumer: str, session_factory: sessionmaker[Session], handler):
     return wrapped
 
 
-def _queue_url(sqs: object, name: str) -> str:
-    return sqs.get_queue_url(QueueName=name)["QueueUrl"]  # type: ignore[attr-defined]
-
-
 def _open_orders_provider(session_factory: sessionmaker[Session]):
     placeholders = ", ".join(f"'{s}'" for s in _TERMINAL_STATES)
 
@@ -174,67 +168,33 @@ def main() -> None:  # pragma: no cover - process entrypoint
         ("webhook-dispatch", container.webhook_dispatcher.handle),
     ]
 
-    if settings.cloud_provider == "azure":
-        # ADR-0023: Service Bus subscription names match the role name exactly, no
-        # ".fifo" suffix convention (infra/azure/modules/messaging) — unlike SQS below.
-        assert (
-            settings.azure_servicebus_namespace
-        ), "AZURE_SERVICEBUS_NAMESPACE required when CLOUD_PROVIDER=azure"
-        if "relay" in roles:
-            publisher = ServiceBusPublisher(
-                settings.azure_servicebus_namespace,
-                settings.azure_servicebus_topic,
-                connection_string=settings.azure_servicebus_connection_string,
-                managed_identity_client_id=settings.azure_managed_identity_client_id,
-            )
-            relay = RelayRunner(OutboxRelay(session_factory, publisher))
-            threads.append(
-                threading.Thread(target=relay.run_forever, name="outbox-relay", daemon=True)
-            )
-
-        for role, handler in consumer_specs:
-            if role not in roles:
-                continue
-            consumer = ServiceBusConsumerRunner(
-                settings.azure_servicebus_namespace,
-                settings.azure_servicebus_topic,
-                role,
-                _dedupe(role, session_factory, handler),
-                connection_string=settings.azure_servicebus_connection_string,
-                managed_identity_client_id=settings.azure_managed_identity_client_id,
-            )
-            threads.append(
-                threading.Thread(target=consumer.run_forever, name=f"consumer-{role}", daemon=True)
-            )
-    else:
-        sqs = boto3.client(
-            "sqs", endpoint_url=settings.aws_endpoint_url, region_name=settings.aws_region
+    # ADR-0023: Service Bus subscription names match the role name exactly (infra/azure/
+    # modules/messaging).
+    assert settings.azure_servicebus_namespace, "AZURE_SERVICEBUS_NAMESPACE required"
+    if "relay" in roles:
+        publisher = ServiceBusPublisher(
+            settings.azure_servicebus_namespace,
+            settings.azure_servicebus_topic,
+            connection_string=settings.azure_servicebus_connection_string,
+            managed_identity_client_id=settings.azure_managed_identity_client_id,
         )
+        relay = RelayRunner(OutboxRelay(session_factory, publisher))
+        threads.append(threading.Thread(target=relay.run_forever, name="outbox-relay", daemon=True))
 
-        if "relay" in roles:
-            publisher = SnsFifoPublisher(
-                settings.domain_topic_arn,
-                endpoint_url=settings.aws_endpoint_url,
-                region_name=settings.aws_region,
-            )
-            relay = RelayRunner(OutboxRelay(session_factory, publisher))
-            threads.append(
-                threading.Thread(target=relay.run_forever, name="outbox-relay", daemon=True)
-            )
-
-        for role, handler in consumer_specs:
-            if role not in roles:
-                continue
-            consumer = SqsConsumerRunner(
-                _queue_url(sqs, f"{role}.fifo"),
-                _dedupe(role, session_factory, handler),
-                endpoint_url=settings.aws_endpoint_url,
-                region_name=settings.aws_region,
-            )
-            threads.append(
-                threading.Thread(target=consumer.run_forever, name=f"consumer-{role}", daemon=True)
-            )
-
+    for role, handler in consumer_specs:
+        if role not in roles:
+            continue
+        consumer = ServiceBusConsumerRunner(
+            settings.azure_servicebus_namespace,
+            settings.azure_servicebus_topic,
+            role,
+            _dedupe(role, session_factory, handler),
+            connection_string=settings.azure_servicebus_connection_string,
+            managed_identity_client_id=settings.azure_managed_identity_client_id,
+        )
+        threads.append(
+            threading.Thread(target=consumer.run_forever, name=f"consumer-{role}", daemon=True)
+        )
     if "reconcile" in roles:
         scheduler = ReconcileScheduler(
             container.reconcile_sweeper,

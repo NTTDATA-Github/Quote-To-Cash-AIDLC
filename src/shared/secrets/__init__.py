@@ -1,9 +1,9 @@
 """Secret store port + implementations.
 
-`SecretsManagerSecretStore` (boto3) is intentionally NOT re-exported here — import it from
-`src.shared.secrets.aws` in the composition root. Keeping it out of this package's public
-surface means importing `src.shared.secrets` (for the `SecretStore` port) stays free of
-the AWS SDK, which the "domain is framework-free" import-linter contract requires.
+Implementations: `KeyVaultSecretStore` (Azure, in `.azure`, imported by the composition
+root) and `EnvSecretStore` (tests/local). Adapters that pull in a cloud SDK stay out of
+this package's public surface, which the "domain is framework-free" import-linter
+contract requires.
 """
 
 from __future__ import annotations

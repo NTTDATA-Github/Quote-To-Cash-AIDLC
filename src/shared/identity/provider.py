@@ -31,7 +31,7 @@ class HeaderStubIdentityProvider:
     """Local dev only: trusts `x-tenant-id`/`x-roles` headers outright, no verification.
 
     Deliberately permissive (defaults to `tnt_demo` rather than rejecting) — it's a
-    development convenience, not a security boundary. `CognitoIdentityProvider` is the
+    development convenience, not a security boundary. `KeycloakIdentityProvider` is the
     one that actually rejects unauthenticated requests.
     """
 

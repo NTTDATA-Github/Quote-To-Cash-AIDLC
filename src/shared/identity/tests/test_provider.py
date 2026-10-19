@@ -14,7 +14,7 @@ def test_stub_trusts_headers_outright() -> None:
 
 def test_stub_defaults_tenant_when_header_absent() -> None:
     """Deliberately permissive — local dev convenience, not a security boundary
-    (CognitoIdentityProvider is the one that actually rejects)."""
+    (KeycloakIdentityProvider is the one that actually rejects)."""
     principal = HeaderStubIdentityProvider().authenticate({})
     assert principal is not None
     assert principal.tenant_id == "tnt_demo"

@@ -2,9 +2,9 @@
 
 A `secret_ref` stored on a connection (or a webhook signing key ref) is resolved to the
 actual value here — never stored in plaintext in the DB (SECURITY-12). Local dev uses
-env vars; production uses AWS Secrets Manager (`SecretsManagerSecretStore` in
-`src/shared/secrets/aws.py` — kept in its own module so importing this port does not pull
-in boto3, which keeps the domain modules framework-free, enforced by import-linter).
+env vars; production uses Azure Key Vault (`KeyVaultSecretStore` in `src/shared/secrets/
+azure.py` — kept in its own module so importing this port does not pull in the Azure SDK,
+which keeps the domain modules framework-free, enforced by import-linter).
 
 Every `secret_ref` up to now was provisioned externally (ops runs `aws secretsmanager
 create-secret` by hand, then passes the ref in). Outbound webhook signing secrets are the

@@ -2,7 +2,7 @@
 
 Lives in the shared kernel (not in `src.modules`) because it imports `boto3`, which the
 "framework-free" architecture contract forbids inside modules — same placement as the
-other boto3-backed adapters (`shared/secrets/aws.py`, `shared/messaging/aws.py`). Knows
+other cloud-SDK adapters (`shared/secrets/azure.py`, `shared/messaging/azure.py`). Knows
 nothing about field mapping or any other caller; it just relays a prompt to Bedrock.
 
 Bedrock (not Gemini/Anthropic) is the one provider the portal can use without a new

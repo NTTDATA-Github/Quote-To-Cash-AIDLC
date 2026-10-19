@@ -25,14 +25,11 @@ _ALL_WORKER_ROLES = frozenset(
 
 @dataclass(frozen=True)
 class Settings:
-    profile: str  # "memory" (local dev/tests, no infra) | "postgres" (Postgres + SNS/SQS)
+    profile: str  # "memory" (local dev/tests, no infra) | "postgres" (Postgres + Service Bus)
     database_url: str
     # Which cloud the "postgres" profile's secrets/messaging/identity/LLM adapters come
     # from (ADR-0023). Ignored by the "memory" profile, which uses none of them.
-    cloud_provider: str  # "aws" | "azure"
-    aws_endpoint_url: str | None
     aws_region: str
-    domain_topic_arn: str
     azure_key_vault_uri: str | None
     azure_servicebus_namespace: str | None  # fully-qualified, e.g. "<ns>.servicebus.windows.net"
     azure_servicebus_topic: str
@@ -66,18 +63,15 @@ class Settings:
     # order-fulfillment, projections, webhook-dispatch, relay, reconcile} this `worker`
     # process runs — "all" (default) runs
     # every one, matching today's single-process behavior (ADR-0010's role split, Part 1)
-    cognito_user_pool_id: str | None
-    cognito_client_id: str | None
     # OAuth scope namespace for client_credentials (M2M) tokens:
     # {this}/tenant.<id>, {this}/role.<ROLE>
-    cognito_resource_server_id: str
     cors_allowed_origins: list[str]  # the UI's origin(s) — e.g. an S3/CloudFront URL in prod
     # ERP field-mapping proposer (operator AdminOps "ERP mapping" tab):
     # the Bedrock model the `mapping` worker calls, and the base URL of the separate
     # erp-agent-service the "approve & implement" action hands an approved mapping to.
     mapping_bedrock_model_id: str
-    # Used instead of mapping_bedrock_model_id when cloud_provider="azure" (ADR-0023) —
-    # a direct Anthropic model id, not a Bedrock inference-profile id.
+    # Anthropic model id for the direct Anthropic provider (ADR-0023) — not a Bedrock
+    # inference-profile id.
     mapping_anthropic_model: str
     # Which LLM backend the mapping proposer uses: "bedrock" (AWS), "anthropic" (Anthropic
     # API), or "foundry" (Azure Foundry). Defaults to "anthropic" on azure, "bedrock" on aws.
@@ -118,12 +112,7 @@ def get_settings() -> Settings:
         database_url=os.environ.get(
             "DATABASE_URL", "postgresql+psycopg2://portal:portal@localhost:5432/portal"
         ),
-        cloud_provider=os.environ.get("CLOUD_PROVIDER", "aws"),
-        aws_endpoint_url=os.environ.get("AWS_ENDPOINT_URL"),  # http://localhost:4566 for floci
         aws_region=os.environ.get("AWS_REGION", "us-east-1"),
-        domain_topic_arn=os.environ.get(
-            "DOMAIN_TOPIC_ARN", "arn:aws:sns:us-east-1:000000000000:platform-domain-events.fifo"
-        ),
         azure_key_vault_uri=os.environ.get("AZURE_KEY_VAULT_URI"),
         azure_servicebus_namespace=os.environ.get("AZURE_SERVICEBUS_NAMESPACE"),
         azure_servicebus_topic=os.environ.get("AZURE_SERVICEBUS_TOPIC", "platform-domain-events"),
@@ -140,9 +129,6 @@ def get_settings() -> Settings:
         log_level=os.environ.get("LOG_LEVEL", "INFO"),
         reconcile_interval_seconds=int(os.environ.get("RECONCILE_INTERVAL_SECONDS", "900")),
         worker_roles=_parse_worker_roles(os.environ.get("WORKER_ROLE", "all")),
-        cognito_user_pool_id=os.environ.get("COGNITO_USER_POOL_ID"),
-        cognito_client_id=os.environ.get("COGNITO_CLIENT_ID"),
-        cognito_resource_server_id=os.environ.get("COGNITO_RESOURCE_SERVER_ID", "o2c"),
         cors_allowed_origins=[
             origin.strip()
             for origin in os.environ.get(

@@ -5,10 +5,10 @@ infrastructure by `settings.profile`:
 - "memory": in-memory bus + event store, for local dev/tests (no infra),
 - "postgres": PostgresEventStore + Postgres repos/projection store + real/stub Odoo
   adapter + Secrets Manager. The repo publishes nothing itself (PostgresEventStore writes
-  the outbox row in the same transaction as the event); the outbox relay and SQS consumers
+  the outbox row in the same transaction as the event); the outbox relay and Service Bus consumers
   (worker, item C) do the async delivery. `order_processor` / `delivery_handler` /
   `order_projector` are exposed on the container so the worker can wire the same handler
-  instances into `SqsConsumerRunner`s without re-deriving the object graph.
+  instances into `ServiceBusConsumerRunner`s without re-deriving the object graph.
 
 Kept out of the domain: this module is allowed to import everything; nothing imports it
 except the api/worker hosts.
@@ -115,13 +115,11 @@ from src.shared.config import Settings, get_settings
 from src.shared.erp_probe import ErpProbe, GenericErpProbe, StubErpProbe
 from src.shared.eventsourcing import EventSourcedRepository, EventStore, InMemoryEventStore
 from src.shared.identity import (
-    CognitoIdentityProvider,
     EntraIdentityProvider,
     HeaderStubIdentityProvider,
     IdentityProvider,
     KeycloakIdentityProvider,
 )
-from src.shared.identity.cognito import issuer_url
 from src.shared.llm import (
     AnthropicLlmClient,
     AzureFoundryLlmClient,
@@ -133,7 +131,6 @@ from src.shared.messaging.facts import BusFactPublisher, FactPublisher, OutboxFa
 from src.shared.persistence.engine import get_session_factory
 from src.shared.persistence.event_store import PostgresEventStore
 from src.shared.secrets import EnvSecretStore, SecretStore
-from src.shared.secrets.aws import SecretsManagerSecretStore
 from src.shared.secrets.azure import KeyVaultSecretStore
 
 if TYPE_CHECKING:
@@ -257,7 +254,7 @@ class Container:
     shipment_service: ShipmentService
     invoice_service: InvoiceService
     # ordering side of the shipment/invoice saga (ADR-0018) — the `order-fulfillment`
-    # consumer; exposed so the worker can wire it into an SqsConsumerRunner
+    # consumer; exposed so the worker can wire it into a ServiceBusConsumerRunner
     order_fulfillment_consumer: OrderFulfillmentConsumer
     orders: EventSourcedRepository[
         Order
@@ -520,60 +517,34 @@ def _has_adapter_for(settings: Settings) -> Callable[[str], bool]:
 
 
 def _resolve_identity_provider(settings: Settings) -> IdentityProvider:
-    """Real verification once the active cloud's identity env vars are configured; the
-    header stub until then (so the postgres profile stays usable for local dev against
-    floci — with a *live* Odoo/worker/SQS pipeline but no identity provider set up yet —
-    without hard-failing container construction). ADR-0023: `cloud_provider` picks Cognito
-    vs. Entra; within either, setting the relevant env vars turns on real verification."""
-    if settings.cloud_provider == "azure":
-        # Keycloak takes priority: it's the IdentityProvider actually standing today (no
-        # real Entra External ID tenant exists — Entra app creation is blocked in this
-        # sandbox, see ADR-0023). Entra stays available for whenever that changes.
-        if settings.keycloak_issuer:
-            return KeycloakIdentityProvider(
-                issuer=settings.keycloak_issuer,
-                client_id=settings.keycloak_client_id,
-            )
-        if settings.entra_tenant_id and settings.entra_client_id:
-            return EntraIdentityProvider(
-                tenant_id=settings.entra_tenant_id,
-                client_id=settings.entra_client_id,
-                tenant_claim_name=settings.entra_tenant_claim_name,
-            )
-        log.warning(
-            "KEYCLOAK_ISSUER/ENTRA_TENANT_ID+ENTRA_CLIENT_ID not set — "
-            "using the header stub, not real auth"
+    """Real verification once the identity env vars are configured; the header stub until
+    then (so the postgres profile stays usable without an identity provider set up yet)."""
+    # Keycloak takes priority: it's the IdentityProvider actually standing today (no real
+    # Entra External ID tenant exists — Entra app creation is blocked in this sandbox, see
+    # ADR-0023). Entra stays available for whenever that changes.
+    if settings.keycloak_issuer:
+        return KeycloakIdentityProvider(
+            issuer=settings.keycloak_issuer,
+            client_id=settings.keycloak_client_id,
         )
-        return HeaderStubIdentityProvider()
-
-    if not settings.cognito_user_pool_id or not settings.cognito_client_id:
-        log.warning(
-            "COGNITO_USER_POOL_ID/COGNITO_CLIENT_ID not set — using the header stub, not real auth"
+    if settings.entra_tenant_id and settings.entra_client_id:
+        return EntraIdentityProvider(
+            tenant_id=settings.entra_tenant_id,
+            client_id=settings.entra_client_id,
+            tenant_claim_name=settings.entra_tenant_claim_name,
         )
-        return HeaderStubIdentityProvider()
-    issuer = issuer_url(
-        aws_endpoint_url=settings.aws_endpoint_url,
-        aws_region=settings.aws_region,
-        user_pool_id=settings.cognito_user_pool_id,
+    log.warning(
+        "KEYCLOAK_ISSUER/ENTRA_TENANT_ID+ENTRA_CLIENT_ID not set — using the header stub, "
+        "not real auth"
     )
-    return CognitoIdentityProvider(
-        user_pool_id=settings.cognito_user_pool_id,
-        client_id=settings.cognito_client_id,
-        issuer=issuer,
-        resource_server_id=settings.cognito_resource_server_id,
-    )
+    return HeaderStubIdentityProvider()
 
 
 def _resolve_secret_store(settings: Settings) -> SecretStore:
-    """ADR-0023: which cloud's secret store backs the `SecretStore` port."""
-    if settings.cloud_provider == "azure":
-        assert settings.azure_key_vault_uri, "AZURE_KEY_VAULT_URI required for CLOUD_PROVIDER=azure"
-        return KeyVaultSecretStore(
-            settings.azure_key_vault_uri,
-            managed_identity_client_id=settings.azure_managed_identity_client_id,
-        )
-    return SecretsManagerSecretStore(
-        endpoint_url=settings.aws_endpoint_url, region_name=settings.aws_region
+    assert settings.azure_key_vault_uri, "AZURE_KEY_VAULT_URI required"
+    return KeyVaultSecretStore(
+        settings.azure_key_vault_uri,
+        managed_identity_client_id=settings.azure_managed_identity_client_id,
     )
 
 
@@ -586,17 +557,13 @@ def _llm_client(settings: Settings, secrets: SecretStore) -> LlmClient:
     Cloud-agnostic provider selection: `mapping_llm_provider` (if set) overrides the
     general `llm_provider`. When not set, defaults to openai (if a Foundry endpoint is
     configured — infra/azure deploys an OpenAI-format model there), else anthropic
-    (azure), else bedrock (aws). "foundry" (Claude via Foundry) must be chosen explicitly.
+    else anthropic. "foundry" (Claude via Foundry) and "bedrock" must be chosen explicitly.
     """
     provider = settings.mapping_llm_provider
     if not provider:
         provider = settings.llm_provider
     if not provider:
-        provider = (
-            "openai"
-            if settings.foundry_endpoint
-            else ("anthropic" if settings.cloud_provider == "azure" else "bedrock")
-        )
+        provider = "openai" if settings.foundry_endpoint else "anthropic"
 
     if provider == "openai":
         if not settings.foundry_endpoint:
