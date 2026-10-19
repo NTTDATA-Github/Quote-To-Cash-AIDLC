@@ -41,15 +41,14 @@ Same code, two entrypoints (`src/composition.py` is the one place the object gra
 
 - **api** — FastAPI: reseller + operator GraphQL, the inbound ERP webhook, health. Writes
   events, reads projections. No ERP I/O.
-- **worker** — headless: the SQS consumers, the outbox relay, the reconciliation scheduler.
+- **worker** — headless: the Service Bus consumers, the outbox relay, the reconciliation scheduler.
   Role-splittable via `WORKER_ROLE` (ADR-0010): `order-processing`, `order-delivery`,
   `order-fulfillment`, `projections`, `webhook-dispatch`, `relay`, `reconcile` — each an
   independently scalable thread, all in one process by default.
 
 Backing services: a single **Postgres** (event store + outbox + snapshots + projections +
-reference data, ADR-0004), and an **SNS FIFO → SQS FIFO** bus. Locally the bus is the
-in-memory implementation (tests) or **floci** (the AWS emulator); in production it's AWS,
-with api/worker on ECS Fargate. See the [HLD](architecture/hld.md) for the container diagram
+reference data, ADR-0004), and an **Azure Service Bus topic → subscriptions** bus. Locally the bus is the
+in-memory implementation; in production it's Azure, with api/worker on Azure Container Apps. See the [HLD](architecture/hld.md) for the container diagram
 and data-ownership tables, and [local-setup.md](local-setup.md) to run it.
 
 ## 4. The consistency model (the heart of it)
@@ -83,29 +82,28 @@ GraphQL read never replays the store.
   not an identity-resolution service. Routing (`resolve_owning_connection`) is driven by
   **which connection owns the items**, verified against the tenant's binding — not by the
   caller. One order → one connection (mixed-ERP orders are refused).
-- **Identity** (ADR-0009): one provider (Cognito) for human and machine-to-machine auth;
+- **Identity** (ADR-0009): one provider (Keycloak) for human and machine-to-machine auth;
   a header stub locally. The API rejects unauthenticated calls before GraphQL executes.
-- **Security**: secrets are pointers resolved from Secrets Manager (never stored raw), with
+- **Security**: secrets are pointers resolved from Key Vault (never stored raw), with
   the inbound-webhook secret kept distinct from the ERP login secret; reseller surfaces
   never expose ERP identity (FR-19); row-level-security policies exist on the order tables
   for defense in depth (enabling an app DB role is a tracked, not-yet-activated step).
 
 ## 6. Messaging topology
 
-Transactional outbox → `platform-domain-events.fifo` (SNS FIFO) → SQS FIFO queues, each with
+Transactional outbox → `platform-domain-events` (Service Bus topic) → Service Bus subscription queues, each with
 an `eventType` filter policy and a DLQ (`maxReceiveCount=5`). `MessageGroupId = order_id`
 (per-order ordering, cross-order parallelism); `MessageDeduplicationId = event_id`.
 
 | Queue | Receives | Consumer |
 |---|---|---|
-| `order-processing.fifo` | `OrderSubmitted`, `OrderAmended` | validate + ownership routing |
-| `order-delivery.fifo` | `OrderReadyForDelivery`, `OrderCancellationRequested` | ERP submit/cancel |
-| `order-fulfillment.fifo` | `ShipmentRecorded`, `InvoiceRecorded` | the fulfillment saga (bumps order scores) |
-| `projections.fifo` | all events | build read models |
-| `webhook-dispatch.fifo` | lifecycle events | outbound reseller notifications |
+| `order-processing` | `OrderSubmitted`, `OrderAmended` | validate + ownership routing |
+| `order-delivery` | `OrderReadyForDelivery`, `OrderCancellationRequested` | ERP submit/cancel |
+| `order-fulfillment` | `ShipmentRecorded`, `InvoiceRecorded` | the fulfillment saga (bumps order scores) |
+| `projections` | all events | build read models |
+| `webhook-dispatch` | lifecycle events | outbound reseller notifications |
 
-Provisioned by `scripts/messaging_bootstrap.py` locally (idempotent), expressed as CDK for
-AWS. Plain-CRUD domain facts (`ItemSynced`, `ConnectionRegistered`, …) publish onto the same
+Provisioned by Terraform in `infra/azure/modules/messaging`. Plain-CRUD domain facts (`ItemSynced`, `ConnectionRegistered`, …) publish onto the same
 topic via the same outbox with no consumer yet — durably recorded, wired to a queue later
 with a filter-policy change, not a producer change.
 

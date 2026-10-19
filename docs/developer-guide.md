@@ -24,10 +24,10 @@ scheduler ─▶ each ACTIVE connection
                │     Order.observe ─▶ OrderObserved ─▶ events + outbox
                └─ for each adopted order: fetch_status, fetch_shipments, fetch_invoices
 
-outbox ─▶ relay ─▶ SNS
-                     ├─ projections.fifo        build the orders read model
-                     ├─ webhook-dispatch.fifo   POST to the reseller (not on OrderObserved)
-                     └─ order-fulfillment.fifo  shipment/invoice scores back onto the order
+outbox ─▶ relay ─▶ Service Bus topic
+                     ├─ projections        build the orders read model
+                     ├─ webhook-dispatch   POST to the reseller (not on OrderObserved)
+                     └─ order-fulfillment  shipment/invoice scores back onto the order
 ```
 
 ---
@@ -43,7 +43,7 @@ An operator writes these rows. None of them are event-sourced. IDs below are reu
 | `subsidiary_routes` | `sub_in` → `conn_odoo_in`, `erp_company_id=1` | That database is this subsidiary. One connection belongs to one subsidiary |
 | `tenant_connection_bindings` | `tnt_acme` + `conn_odoo_in` + `erp_customer_id=42`, `status=VERIFIED` | Inside that database, Acme is customer 42 |
 
-Secrets are pointers (`secret_ref`), resolved from Secrets Manager at call time. The webhook secret is a different secret from the login.
+Secrets are pointers (`secret_ref`), resolved from Key Vault at call time. The webhook secret is a different secret from the login.
 
 A quotation is adopted only when both matches succeed: `sale.order.company_id` equals `erp_company_id`, and `partner_id` equals a verified `erp_customer_id`. Otherwise the row stays in Odoo.
 
@@ -111,7 +111,7 @@ Odoo shipments are done `stock.picking`s. The picking id is stable across polls.
 
 `InvoiceService.record_once` does the same for `InvoiceRecorded`. The order is not loaded in that call.
 
-`ShipmentRecorded` / `InvoiceRecorded` are filtered to `order-fulfillment.fifo`. `OrderFulfillmentConsumer` loads the order and applies:
+`ShipmentRecorded` / `InvoiceRecorded` are filtered to `order-fulfillment`. `OrderFulfillmentConsumer` loads the order and applies:
 
 | Event consumed | Order command | Event emitted |
 |---|---|---|
@@ -169,7 +169,7 @@ OrderObserved ──▶ SENT_TO_ERP ──confirm()──▶ CONFIRMED ──clo
 
 ### 4.4 What the reseller is sent
 
-`webhook-dispatch.fifo` handles `DISPATCHABLE_EVENT_TYPES`. `OrderObserved` is not one of them. The body is the same for every event that is: the event name, id, time, and the order id, reseller-facing number, and latest status.
+`webhook-dispatch` handles `DISPATCHABLE_EVENT_TYPES`. `OrderObserved` is not one of them. The body is the same for every event that is: the event name, id, time, and the order id, reseller-facing number, and latest status.
 
 ```json
 { "event": "OrderConfirmed", "eventId": "evt_a9f3", "occurredAt": "2026-10-05T09:12:03Z",

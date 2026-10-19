@@ -1,7 +1,7 @@
 # Odoo 17 on Container Apps, with its own Postgres Flexible Server. This database is not
 # the portal's — do not point Odoo at modules/database's server. Reuses the shared Key
 # Vault (var.vault_id) for its db password instead of a second vault, same "one secret
-# store, many secrets" shape as AWS's single Secrets Manager account.
+# store, many secrets" shape of a single Key Vault.
 
 resource "azurerm_postgresql_flexible_server" "odoo" {
   name                   = "${var.prefix}-odoo-pg"
@@ -36,11 +36,11 @@ resource "azurerm_postgresql_flexible_server_database" "odoo" {
   charset   = "UTF8"
 }
 
-# No VNet integration here (same scope as AWS's odoo module — Fargate task also got a
+# No VNet integration here (Odoo runs on AWS; this module is pending removal, see docs/deploy-azure.md)
 # public IP). This firewall rule is Azure's "allow trusted Azure services" exception,
 # the practical equivalent of reachability from the Odoo task without standing up
 # private networking. NOT a real private-networking boundary — same admitted gap as
-# AWS's public_access=false (ADR-0020's "Revisit when").
+# the public_access=false default (ADR-0020's "Revisit when").
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure_services" {
   name             = "allow-azure-services"
   server_id        = azurerm_postgresql_flexible_server.odoo.id
@@ -92,7 +92,7 @@ resource "azurerm_container_app" "odoo" {
 
     container {
       name   = "odoo"
-      image  = var.odoo_image != "" ? var.odoo_image : "docker.io/library/odoo:17" # public placeholder for the first apply, before any image is pushed (mirrors AWS's ":bootstrap" fallback)
+      image  = var.odoo_image != "" ? var.odoo_image : "docker.io/library/odoo:17" # public placeholder for the first apply, before any image is pushed (placeholder until the first image push)
       cpu    = 1
       memory = "2Gi"
 

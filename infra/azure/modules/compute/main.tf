@@ -1,4 +1,4 @@
-# Container Apps environment + api/worker apps. Replaces ECS Fargate cluster + services +
+# Container Apps environment + api/worker apps. Container Apps environment + apps (replaces ECS).
 # ALB/listeners/target groups/ACM — Container Apps' built-in ingress gives free TLS on
 # *.azurecontainerapps.io, so there is no ALB-equivalent resource here at all.
 
@@ -162,7 +162,7 @@ resource "azurerm_container_app" "worker" {
       }
 
       # Not in var.app_env (api doesn't get this — it never touches Service Bus
-      # directly, same scope AWS had). SAS connection string, not managed identity —
+      # directly, same scope as before). SAS connection string, not managed identity —
       # see modules/messaging's "worker" authorization rule.
       env {
         name        = "AZURE_SERVICEBUS_CONNECTION_STRING"

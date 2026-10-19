@@ -1,4 +1,4 @@
-# The Azure counterpart to infra/terraform/envs/staging.tfvars. Same "staging" label,
+# Staging environment for the Azure stack.
 # same deliberate public_access default — see ADR-0023 and docs/deploy-azure.md.
 
 subscription_id = "8f7d862b-5995-401f-a514-7f9f1f9ebae5" # mikecarsdevtest subscription

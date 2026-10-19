@@ -1,6 +1,6 @@
 # Log Analytics workspace — replaces the CloudWatch log groups. Container Apps' built-in
 # logging ships stdout/stderr here; no per-app log-group resource needed (unlike
-# infra/terraform's modules/observability, which creates one group per service).
+# one log group per service).
 
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "${var.prefix}-logs"

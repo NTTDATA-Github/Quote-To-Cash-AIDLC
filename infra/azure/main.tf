@@ -1,6 +1,4 @@
-# Root composition for the Azure stack (ADR-0023 / docs/deploy-azure.md). Mirrors
-# infra/terraform's module boundaries 1:1 so the two stacks are easy to diff while they
-# run in parallel.
+# Root composition for the Azure stack (ADR-0023 / docs/deploy-azure.md). 
 
 resource "random_string" "suffix" {
   length  = 6

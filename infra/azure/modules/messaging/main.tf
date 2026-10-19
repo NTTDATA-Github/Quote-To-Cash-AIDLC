@@ -1,19 +1,19 @@
-# Service Bus topic -> subscriptions. Replaces SNS FIFO topic -> SQS FIFO queues + DLQs.
+# Service Bus topic -> subscriptions. Replaces the topic and queues with dead-letter handling.
 # A subscription IS the queue; dead-lettering is built into every subscription, so there
-# is no separate DLQ resource or queue policy here (unlike infra/terraform's messaging
+# is no separate DLQ resource or queue policy here (unlike a queue-per-subscription setup,
 # module, which creates both).
 #
 # FIFO equivalence: `requires_session = true` + the publisher setting SessionId
-# (= today's SNS MessageGroupId) on every message. `support_ordering` on the topic keeps
+# (the session key) on every message. `support_ordering` on the topic keeps
 # delivery-order guarantees end to end. Both this and `requires_duplicate_detection` are
 # fixed at creation (ForceNew) — do not flip them after the first apply without recreating
 # the entity.
 #
-# Filters: SNS's `filter_policy` (matched against MessageAttributes) becomes a SQL filter
+# Filters: the subscription filter becomes a SQL filter
 # matched against a custom application property the publisher sets on each message
 # (`eventType` — see the new messaging/azure.py adapter). A subscription with no filter
 # gets `null` here and keeps the default `$Default` TrueFilter (receives everything,
-# same as `queue_filters[...] == null` on the AWS side).
+# same as an absent filter).
 
 resource "azurerm_servicebus_namespace" "main" {
   # Namespace names may not end in "-sb"/"-mgmt" (reserved suffixes).
@@ -36,7 +36,7 @@ resource "azurerm_servicebus_subscription" "work" {
   topic_id            = azurerm_servicebus_topic.domain_events.id
   max_delivery_count  = var.max_delivery_count
   requires_session    = true
-  default_message_ttl = "P14D" # 14 days, matches the AWS DLQ's message_retention_seconds
+  default_message_ttl = "P14D" # 14 days, matches the dead-letter retention
 }
 
 # A *named* rule, not "$Default": the azurerm provider (confirmed empirically, v4.81.0)
@@ -63,7 +63,7 @@ resource "azurerm_servicebus_subscription_rule" "filter" {
 # sandbox's signed-in principal lacks (see docs/deploy-azure.md). Generating a SAS
 # connection string is a plain Contributor action on the namespace, same category as
 # ACR's admin credentials and Key Vault's access policies. send+listen only — matches
-# the worker's exact AWS scope (ConsumeQueues + PublishDomainEvents), no manage claim.
+# the worker's scope (ConsumeQueues + PublishDomainEvents), no manage claim.
 resource "azurerm_servicebus_namespace_authorization_rule" "worker" {
   name         = "worker"
   namespace_id = azurerm_servicebus_namespace.main.id

@@ -1,11 +1,11 @@
-# Entra External ID app registration — replaces the Cognito user pool + SPA client.
+# Entra External ID app registration — the SPA client for Keycloak/Entra sign-in.
 #
 # The tenant itself is NOT created here (manual Phase 1 step, docs/deploy-azure.md — the
 # provider needs a tenant to authenticate against before it can create anything in it,
-# same reason AWS's GitHub OIDC role was human-run). This module only registers the app
+# same reason it is human-run). This module only registers the app
 # inside that already-existing tenant.
 #
-# `custom:tenant_id` (Cognito's per-user custom attribute) has no equivalent Terraform
+# `custom:tenant_id` (a per-user custom attribute) has no equivalent Terraform
 # resource today — Entra External ID custom attributes are portal/user-flow config. See
 # ADR-0023's "Revisit when". Role (OPERATOR) maps cleanly to an Entra app role instead.
 

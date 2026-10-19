@@ -12,7 +12,7 @@ variable "create_app" {
 }
 
 variable "callback_urls" {
-  description = "SPA redirect URIs. Empty by default — set once the UI's Front Door URL is known (same chicken-and-egg as Cognito's callback_urls)."
+  description = "SPA redirect URIs. Empty by default — set once the UI's Front Door URL is known (a chicken-and-egg: the URL is known only after the UI is deployed)."
   type        = list(string)
   default     = []
 }

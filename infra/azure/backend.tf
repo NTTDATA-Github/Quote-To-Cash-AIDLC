@@ -1,6 +1,6 @@
 # Remote state: Storage Account + container (created once by infra/azure/bootstrap).
 # A blob lease does locking — no separate lock-table resource, unlike the S3+DynamoDB
-# backend in infra/terraform.
+# backend.
 #   terraform init -backend-config=envs/staging.backend.tfbackend
 # See docs/deploy-azure.md.
 terraform {

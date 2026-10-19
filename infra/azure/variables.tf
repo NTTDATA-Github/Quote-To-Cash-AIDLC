@@ -15,7 +15,7 @@ variable "location" {
 }
 
 variable "environment" {
-  description = "Environment name (used in resource names/tags). Single env for now, same as infra/terraform."
+  description = "Environment name (used in resource names/tags). Single env for now."
   type        = string
   default     = "staging"
 }
@@ -56,11 +56,11 @@ variable "std_billable" {
 }
 
 # ---------------------------------------------------------------------------
-# PUBLIC ACCESS — same lever and same warning as infra/terraform's public_access
+# PUBLIC ACCESS — same lever and same warning as the database module
 # (see docs/deploy-azure.md and ADR-0020). true = Postgres Flexible Server allows
 # 0.0.0.0-255.255.255.255 via firewall rule. Container Apps' external ingress is always
 # public regardless of this flag — there is no private-ingress mode wired up here, same
-# admitted gap AWS's public_access=false has (see ADR-0020's "Revisit when").
+# admitted gap that public_access=false has (see ADR-0020's "Revisit when").
 # ---------------------------------------------------------------------------
 variable "public_access" {
   description = "Allow any IP to reach Postgres directly (debug convenience; unsafe for real data)."

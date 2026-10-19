@@ -22,7 +22,7 @@ references them.
 |---|---|
 | `base_url` | Account-specific REST domain, `https://<ACCOUNT_ID>.suitetalk.api.netsuite.com` (mock: `http://127.0.0.1:8075`). |
 | `credentials` | Non-secret bag the adapter reads: `account_id` (the TBA realm), `consumer_key`, `token_id`. |
-| `secret_ref` | A Secrets Manager ref whose value is **JSON** `{"consumer_secret": "...", "token_secret": "..."}` — the two secret TBA components. A malformed/empty secret is a terminal error. |
+| `secret_ref` | A Key Vault ref whose value is **JSON** `{"consumer_secret": "...", "token_secret": "..."}` — the two secret TBA components. A malformed/empty secret is a terminal error. |
 | `webhook_secret_ref` | Unused today — NetSuite runs polling-only (see [webhook.md](./webhook.md)). |
 
 The single-secret-holds-JSON choice is deliberate (requirements D-NS-2): it keeps NetSuite
@@ -36,7 +36,7 @@ and `token_id`/`token_secret` — and the account id as the OAuth `realm` (upper
 signing is a pure, unit-tested function (`oauth1_authorization_header`) and is
 independently re-verified by the mock. A bad credential returns `401`, which the adapter
 classifies **terminal** (no retry); timeouts/`5xx`/connection errors are transient (retry via
-SQS redrive).
+Service Bus redelivery).
 
 ## How an order arrives
 

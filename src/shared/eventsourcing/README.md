@@ -131,7 +131,7 @@ state, full stop. There is no other place "the current status" lives.
 - **Publisher**: publishes events directly (used by the in-memory/test setup, where there's
   no separate relay process to wait for).
 
-Both are ports; production binds an SNS-FIFO publisher and a Postgres-backed outbox
+Both are ports; production binds an Azure Service Bus publisher and a Postgres-backed outbox
 (`src/shared/messaging/`, `src/shared/persistence/`) — the aggregate and repository never
 know which.
 

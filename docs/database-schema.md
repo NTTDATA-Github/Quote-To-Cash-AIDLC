@@ -23,7 +23,7 @@ erDiagram
         text connection_id PK
         text erp_type
         text base_url
-        text secret_ref "ERP login credential (Secrets Manager)"
+        text secret_ref "ERP login credential (Key Vault)"
         text webhook_secret_ref "inbound webhook secret, separate from the above"
         text status
     }
@@ -85,11 +85,11 @@ erDiagram
 ### The outbox — how events leave the database safely
 - **`outbox`** — a copy of each event written in the *same transaction* as the `events`
   row (see the write path in `target-architecture.md` §3). A background relay
-  publishes unpublished rows (`published_at IS NULL`) to SNS, then marks them published.
+  publishes unpublished rows (`published_at IS NULL`) to Service Bus topic, then marks them published.
   This is what makes "append an event" and "notify everyone else" atomic without a
   distributed transaction — either both happen or neither does.
 - **`processed_events`** — the flip side, on the *consuming* end: `(consumer, event_id)`
-  pairs already handled, so a redelivered message (SQS is at-least-once) is a safe no-op
+  pairs already handled, so a redelivered message (Service Bus is at-least-once) is a safe no-op
   instead of double-processing.
 - **`erp_event_inbox`** — one row per authenticated inbound ERP webhook (`0011_erp_event_inbox`).
   `body` is the raw request bytes. The payload is not parsed into columns.

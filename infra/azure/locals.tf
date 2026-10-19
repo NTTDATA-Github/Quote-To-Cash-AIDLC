@@ -5,7 +5,7 @@ locals {
   # Alphanumeric-only, no hyphens: Storage Account / ACR / Key Vault name rules.
   prefix_alnum = replace(local.prefix, "-", "")
 
-  # Messaging topology — same 5 subscriptions + filters as infra/terraform's queue_filters,
+  # Messaging topology — the 5 subscriptions and their filters,
   # renamed for Service Bus (no ".fifo" suffix convention; sessions give FIFO instead).
   topic_name = "platform-domain-events"
 
@@ -38,7 +38,7 @@ locals {
     # with nothing left to return when client_id is null. module.identity.client_id is
     # null when var.create_entra_app=false, and Container Apps' env value must be a real
     # string. Empty string is exactly what makes composition._resolve_identity_provider
-    # fall back to the header stub, same as an unset COGNITO_CLIENT_ID on the AWS path.
+    # fall back to the header stub, same as an unset KEYCLOAK_ISSUER.
     { name = "ENTRA_CLIENT_ID", value = module.identity.client_id != null ? module.identity.client_id : "" },
     { name = "CORS_ALLOWED_ORIGINS", value = var.cors_allowed_origins },
     # Mapping service LLM: OpenAI-format model on Azure Foundry. The model id is the

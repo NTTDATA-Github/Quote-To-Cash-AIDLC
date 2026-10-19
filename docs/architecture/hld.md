@@ -41,7 +41,7 @@ Interacting parties and systems:
 | **Worker host** *(Python process — not HTTP, not FastAPI)* | Asynchronous processing: order routing, ERP delivery, read-model projection, outbound webhook dispatch, outbox relay, and the reconciliation scheduler (polling fallback). Same codebase/composition root as the API, different entrypoint. | Message bus; Domain modules; PostgreSQL; ERP; Azure Key Vault; Azure AI Foundry |
 | **Domain modules** (shared) | The business logic shared by API + Worker, grouped by subdomain (ADR-0017): **`sales/`** (`ordering` — the event-sourced core — plus `quoting`, `shipment`, `invoicing`), **`reference/`** (`catalog`, `connections`, `tenancy`), **`integration/`** (`erp` adapters + registry, inbound/outbound `webhooks`). | PostgreSQL (via hosts) |
 | **PostgreSQL (Azure Postgres Flexible Server)** | Single datastore: event store + outbox + snapshots, order projections (read models), and reference/CRUD data. | — (owned by the domain) |
-| **Message bus** | Async transport: Azure Service Bus topic → per-consumer subscriptions (+ DLQ). floci locally, Azure Service Bus in prod. | — |
+| **Message bus** | Async transport: Azure Service Bus topic → per-consumer subscriptions (+ DLQ). | — |
 | **Keycloak** | Identity provider (JWT); header-stub provider for local dev. | — |
 | **Azure Key Vault** | Stores ERP login and webhook signing secrets (never persisted in the DB). | — |
 | **Azure AI Foundry** | gpt-4o deployment used only by the mapping proposer to draft an ERP field mapping; never in the order-sync path. | — |
@@ -123,8 +123,7 @@ Modules are grouped by subdomain (ADR-0017): `sales/`, `reference/`, `integratio
   the target architecture) so the synchronous and asynchronous workloads scale
   independently; the Worker is further role-splittable (routing / delivery / projections /
   dispatch / relay / reconcile).
-- **Local/dev** runs the same code with an in-memory bus and (optionally) floci standing
-  in for Azure; **prod** uses the Azure services above.
+- **Local/dev** runs the same code with an in-memory bus; **prod** uses the Azure services above.
 
 ## Known gaps (honest review, 2026-10-04)
 

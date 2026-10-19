@@ -2,9 +2,9 @@
 # equivalent on Azure; Burstable SKU + storage autoscale is the closest "pay for what you
 # use" match (see ADR-0023).
 #
-# Network mode is fixed at creation (public vs. VNet-integrated) — unlike AWS's
+# Network mode is fixed at creation (public vs. VNet-integrated) — unlike the
 # `publicly_accessible`, this is not a flag you flip later without recreating the server.
-# `public_access` here only controls the firewall rule, same lever semantics as AWS.
+# `public_access` here only controls the firewall rule, same lever semantics as the public_access flag in variables.tf.
 
 resource "azurerm_postgresql_flexible_server" "main" {
   name                   = "${var.prefix}-pg"
@@ -30,7 +30,7 @@ resource "azurerm_postgresql_flexible_server_database" "main" {
   charset   = "UTF8"
 }
 
-# Debug convenience (public_access=true, same warning as AWS's public_access): any IP can
+# Debug convenience (public_access=true, see variables.tf): any IP can
 # reach the server. Unsafe for real data — credentials are still required.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_all" {
   count            = var.public_access ? 1 : 0

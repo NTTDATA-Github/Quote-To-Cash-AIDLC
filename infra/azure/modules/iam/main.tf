@@ -1,9 +1,9 @@
-# User-assigned managed identities (replaces the ECS task roles) + role assignments
+# User-assigned managed identities (one per container app) + role assignments
 # (replaces the inline IAM policies) + the GitHub Actions OIDC deploy identity.
 #
-# Scope matches AWS exactly: api gets Key Vault read/write only (no messaging
+# Scope: api gets Key Vault read/write only (no messaging
 # permissions — api never touches Service Bus directly, same as it never touched
-# SQS/SNS). worker gets Key Vault read/write + Service Bus send/receive (it consumes the
+# Service Bus). Worker gets Key Vault read/write + Service Bus send/receive (it consumes the
 # subscriptions and publishes the outbox relay). odoo gets read-only Key Vault access
 # (its db-password secret only).
 #
@@ -52,7 +52,7 @@ resource "azuread_service_principal" "github_deploy" {
 # Covers pushes to main, the deploy workflow's push trigger. A manual workflow_dispatch
 # run from a different branch needs its own federated credential (add one per branch/
 # environment as needed) — Azure's federated-credential subject must match exactly,
-# unlike AWS's OIDC condition which allowed any branch/workflow via "repo:<repo>:*".
+# unlike a wildcard OIDC condition which allowed any branch/workflow via "repo:<repo>:*".
 resource "azuread_application_federated_identity_credential" "github_main" {
   count          = local.make_oidc
   application_id = azuread_application.github_deploy[0].id

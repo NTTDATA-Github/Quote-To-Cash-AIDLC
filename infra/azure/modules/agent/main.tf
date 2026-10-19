@@ -89,7 +89,7 @@ resource "azurerm_container_app" "agent" {
         value = "/app/worktrees"
       }
       env {
-        name  = "GITHUB_TOKEN"
+        name        = "GITHUB_TOKEN"
         secret_name = "github-token"
       }
       env {
@@ -131,7 +131,7 @@ resource "azurerm_container_app" "agent" {
 
   ingress {
     allow_insecure_connections = false
-    external_enabled           = false  # Internal-only; never public
+    external_enabled           = false # Internal-only; never public
     target_port                = 8002
     transport                  = "http"
 

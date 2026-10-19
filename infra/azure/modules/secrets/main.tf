@@ -1,17 +1,17 @@
-# Key Vault — replaces Secrets Manager. Access-policy mode (not RBAC): granting a role
+# Key Vault. Access-policy mode (not RBAC): granting a role
 # assignment needs `Microsoft.Authorization/roleAssignments/write`, which this sandbox's
 # signed-in principal lacks, but setting an access policy on the vault is an ordinary
 # `Microsoft.KeyVault/vaults/write` (plain Contributor) action — see docs/deploy-azure.md.
 # Functionally equivalent for our purposes: api/worker get get+set+list+delete, odoo gets
 # get-only, same scope as the role assignments this replaces (Key Vault Secrets
 # Officer / Secrets User). The caller running `terraform apply` also gets a policy, for
-# the same reason the AWS Secrets Manager adapter never needed one — RBAC-mode Key Vault
+# the same reason the app never needs one — RBAC-mode Key Vault
 # does not grant the creator implicit access, access-policy mode doesn't either, so
 # Terraform itself needs a policy to write the two secrets below.
 #
-# Secret names may only contain [0-9A-Za-z-] (no "/"), unlike Secrets Manager's
+# Secret names may only contain [0-9A-Za-z-] (no "/"), unlike Key Vault's
 # "<prefix>/erp/odoo-connection" naming — flattened to "erp-odoo-connection" etc. There is
-# no prefix-glob scoping either, so (same as AWS) everything the app creates at runtime
+# no prefix-glob scoping either, so  everything the app creates at runtime
 # lives in this one vault per environment.
 
 data "azurerm_client_config" "current" {}

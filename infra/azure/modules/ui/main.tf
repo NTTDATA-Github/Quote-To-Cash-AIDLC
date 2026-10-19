@@ -1,13 +1,13 @@
-# Storage static website + Front Door Standard. Replaces S3 (private, OAC) + CloudFront.
+# Storage static website + Front Door Standard. 
 #
-# Front Door's two origin groups + path-based routes reproduce CloudFront's
+# Front Door's two origin groups + path-based routes reproduce the
 # `ordered_cache_behavior` trick for routing `/graphql*` to the api as a second,
-# same-origin destination — same reason as AWS: the UI is HTTPS-only and can't call an
+# same-origin destination — same reason: the UI is HTTPS-only and can't call an
 # HTTP(-only) origin directly without mixed-content errors, and same-origin avoids CORS.
 #
-# SPA fallback is narrower here than on AWS: Storage's `error_404_document` only applies
+# SPA fallback is narrower here: Storage's `error_404_document` only applies
 # to the storage origin (unknown React Router paths), not distribution-wide — unlike
-# CloudFront's known gap (docs/deploy-aws.md) where a real API 403/404 also got rewritten
+# the known gap (see docs/deploy-azure.md) where a real API 403/404 also got rewritten
 # to index.html, because `/graphql*` here is routed to an entirely different origin group
 # that this fallback never touches.
 
@@ -118,16 +118,16 @@ locals {
   ui_dist_dir = "${path.module}/../../../../ui/dist"
   ui_files    = fileset(local.ui_dist_dir, "**")
   content_types = {
-    html = "text/html"
-    js   = "application/javascript"
-    css  = "text/css"
-    json = "application/json"
-    svg  = "image/svg+xml"
-    png  = "image/png"
-    ico  = "image/x-icon"
-    woff = "font/woff"
+    html  = "text/html"
+    js    = "application/javascript"
+    css   = "text/css"
+    json  = "application/json"
+    svg   = "image/svg+xml"
+    png   = "image/png"
+    ico   = "image/x-icon"
+    woff  = "font/woff"
     woff2 = "font/woff2"
-    txt  = "text/plain"
+    txt   = "text/plain"
   }
 }
 
@@ -156,6 +156,6 @@ resource "azurerm_cdn_frontdoor_route" "graphql" {
   forwarding_protocol    = "HttpsOnly"
   https_redirect_enabled = true
   link_to_default_domain = true
-  # No `cache` block: caching is off by default, matching the AWS route's
+  # No `cache` block: caching is off by default, matching the route's
   # "CachingDisabled" managed policy — GraphQL responses are never cacheable.
 }
