@@ -76,3 +76,16 @@ jobs:
         run: npm --prefix ui ci
       - name: Build
         run: npm --prefix ui run build
+
+  docker:
+    name: Docker build (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [api, worker, mocks, agent, keycloak, odoo]
+    steps:
+      - uses: actions/checkout@v4
+      # Build only, no push. Each image must build from a clean checkout.
+      - name: docker build Dockerfile.${{ matrix.image }}
+        run: docker build -f Dockerfile.${{ matrix.image }} -t o2c/${{ matrix.image }}:ci .
