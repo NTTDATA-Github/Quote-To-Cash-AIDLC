@@ -1,5 +1,8 @@
-# Local backing services. api, worker, and the portal run on the host via scripts/local.sh.
+# Local backing services. The api and the demo's dev processes run on the host via
+# scripts/local.sh; this file starts Odoo, its database, Keycloak, and the Postgres that the
+# integration tests use.
 services:
+  # Used by tests/integration/ only. The memory profile does not need a database.
   postgres:
     image: postgres:16-alpine
     environment:
@@ -15,31 +18,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-
-  # Browser for the portal database. Server is the compose service name `postgres`.
-  adminer:
-    image: adminer:4
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      ADMINER_DEFAULT_SERVER: postgres
-    ports:
-      - "8088:8080"
-
-  # AWS emulator (SNS/SQS/Secrets Manager/Cognito). Same boto3 code targets this
-  # locally and real AWS in prod — only AWS_ENDPOINT_URL differs.
-  # The docker socket lets Floci start its browser console at http://localhost:4566/_floci/ui.
-  # FLOCI_BASE_URL is localhost because the api and worker run on the host, not in this network.
-  floci:
-    image: floci/floci:latest
-    user: root
-    ports:
-      - "4566:4566"
-    environment:
-      FLOCI_BASE_URL: http://localhost:4566
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
 
   odoo-db:
     image: postgres:15
@@ -71,56 +49,17 @@ services:
       - odoo-web:/var/lib/odoo
       - ./scripts/odoo-boot.sh:/odoo-boot.sh:ro
 
-  # Containerized api + worker (the same images CI builds and ECS runs). Opt-in via the
-  # `app` profile so the default `docker compose up` (backing services only) and the
-  # host-process flow in scripts/local.sh keep working unchanged:
-  #   docker compose --profile app up --build
-  # Note: inside this network the app reaches floci at http://floci:4566. floci hands back
-  # queue URLs built from FLOCI_BASE_URL, so it is overridden to the in-network host here.
-  app:
-    profiles: ["app"]
+  # Identity for AdminOps sign-in. The realm (o2c, client o2c-portal, demo user operator1)
+  # is baked into Dockerfile.keycloak from keycloak-realm-export.json.
+  keycloak:
     build:
       context: .
-      dockerfile: Dockerfile.api
-    depends_on:
-      postgres:
-        condition: service_healthy
-      floci:
-        condition: service_started
+      dockerfile: Dockerfile.keycloak
     environment:
-      APP_PROFILE: postgres
-      DATABASE_URL: postgresql+psycopg2://portal:portal@postgres:5432/portal
-      AWS_ENDPOINT_URL: http://floci:4566
-      AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      ERP_ADAPTER_MODE: stub
-      CORS_ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
-      LOG_LEVEL: INFO
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     ports:
-      - "8000:8000"
-
-  worker:
-    profiles: ["app"]
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
-    depends_on:
-      postgres:
-        condition: service_healthy
-      floci:
-        condition: service_started
-    environment:
-      APP_PROFILE: postgres
-      DATABASE_URL: postgresql+psycopg2://portal:portal@postgres:5432/portal
-      AWS_ENDPOINT_URL: http://floci:4566
-      AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      ERP_ADAPTER_MODE: stub
-      WORKER_ROLE: all
-      RECONCILE_INTERVAL_SECONDS: "30"
-      LOG_LEVEL: INFO
+      - "8080:8080"
 
 volumes:
   pgdata:

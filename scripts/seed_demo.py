@@ -1,23 +1,21 @@
-"""Seed demo data for local development (idempotent).
+"""Seed the local demo through the running API (memory profile).
 
-Creates realistic data on both sides, not just placeholders:
-- In Odoo (JSON-RPC, admin/admin): renames company 1 to a real-looking distributor name,
-  creates a real-looking reseller customer, a small industrial-distributor product
-  catalog with real SKUs (never a product literally named "DEMO-BOX"), and one confirmed
-  sales order for that customer with a real-looking PO reference.
-- In Postgres: one Odoo connection and a verified binding, using the *actual* partner id
-  Odoo just returned — never a guessed constant (this used to hardcode '10', which had
-  already drifted from what `scripts/local.sh`'s own banner claimed).
+Run after `uvicorn src.api.app:app` starts with APP_PROFILE=memory. The in-memory state
+lives in that process, so run this once per API start.
 
-Sales orders are read from Odoo for that partner; this app does not create them — the
-one this script creates in Odoo is standing in for a reseller's own real order. The
-subsidiary's erp_company_id is Odoo's res.company id (company 1). A quotation whose
-company id is not recorded on a subsidiary is not adopted.
+- In Odoo (JSON-RPC, admin/admin): renames company 1, creates the reseller customer, a small
+  industrial-distributor catalog, and one confirmed sales order with a PO reference. Skip
+  with ODOO_PARTNER_ID=<partner id> when Odoo isn't running.
+- Through the operator GraphQL API: registers the Odoo and NetSuite connections, binds the
+  reseller to both, and routes a subsidiary to each.
+- Through the reseller GraphQL API: registers the local reseller webhook endpoint and writes
+  its signing secret to .local/reseller-secret for scripts/dev_webhook_receiver.py.
+
+Connection secrets go through the env secret store, so the API must start with
+ODOO_WEBHOOK_SECRET and NETSUITE_WEBHOOK_SECRET set (scripts/local.sh does this).
 
 Usage:
-    DATABASE_URL=postgresql+psycopg2://portal:portal@localhost:5432/portal \\
-    AWS_ENDPOINT_URL=http://localhost:4566 \\
-        python -m scripts.seed_demo
+    python -m scripts.seed_demo
 """
 
 from __future__ import annotations
@@ -25,38 +23,53 @@ from __future__ import annotations
 import json
 import os
 import random
-import urllib.error
+import urllib.parse
 import urllib.request
+from pathlib import Path
 from typing import Any
 
-from sqlalchemy import create_engine, text
-from src.shared.secrets.aws import SecretsManagerSecretStore
-from src.shared.secrets.store import SecretNotFound
+API_URL = os.environ.get("API_URL", "http://127.0.0.1:8000")
+KEYCLOAK_REALM_URL = os.environ.get("KEYCLOAK_REALM_URL", "http://localhost:8080/realms/o2c")
+KEYCLOAK_CLIENT_ID = os.environ.get("KEYCLOAK_CLIENT_ID", "o2c-portal")
+SEED_USER = os.environ.get("SEED_USER", "operator1")
+SEED_PASSWORD = os.environ.get("SEED_PASSWORD", "operator1")
+RESELLER_SECRET_FILE = Path(".local/reseller-secret")
 
-_LOGIN_SECRET = "local:odoo-admin-secret"
-_WEBHOOK_SECRET = "local:odoo-webhook-demo-secret"
-# Fixed id + secret so `local.sh up` registers the mock once. A generated id would
-# insert another endpoint on every start, and every event would be delivered twice.
-_RESELLER_ENDPOINT_ID = "whep_local_demo"
-_RESELLER_ENDPOINT_SECRET = "local:reseller-webhook-secret"
-_OUTBOUND_WEBHOOK_SECRET = "whsec_local_dev"
-_RESELLER_MOCK_URL = "http://127.0.0.1:8090/hooks"
-
-_ODOO_URL = os.environ.get("ODOO_URL", "http://localhost:8069")
-_ODOO_DB = "odoo"
-_ODOO_USER = "admin"
-_ODOO_PASSWORD = "admin"
-_SUBSIDIARY_NAME = "Northstar Distribution"
-_RESELLER_NAME = "Acme Retail"
-_PO_REFERENCE = "PO-48213"
+ODOO_URL = os.environ.get("ODOO_URL", "http://localhost:8069")
+ODOO_DB = "odoo"
+ODOO_USER = "admin"
+ODOO_PASSWORD = "admin"
+ODOO_WEBHOOK_SECRET_REF = "env:ODOO_WEBHOOK_SECRET"
+ODOO_SUBSIDIARY_NAME = "Northstar Distribution"
+ODOO_PO_REFERENCE = "PO-48213"
 # (default_code, name, list_price, order quantity) — a generic industrial-distributor
 # catalog, standing in for whatever a real client's products are.
-_PRODUCTS: list[tuple[str, str, float, float]] = [
+PRODUCTS: list[tuple[str, str, float, float]] = [
     ("WH-SHLF-500", "Steel Shelving Unit - 5 Tier", 189.00, 4),
     ("PK-WRAP-6CS", "Heavy-Duty Pallet Wrap (Case of 6)", 42.50, 12),
     ("SFT-GLV-12PK", "Cut-Resistant Safety Gloves (Pack of 12)", 58.00, 25),
     ("LED-HB-150W", "Warehouse LED High-Bay Light, 150W", 124.75, 8),
 ]
+RESELLER_NAME = "Acme Retail"
+
+NETSUITE_URL = os.environ.get("NETSUITE_URL", "http://127.0.0.1:8075")
+NETSUITE_CUSTOMER_ID = "101"
+NETSUITE_SUBSIDIARY_NAME = "Northwind Trading Co."
+NETSUITE_WEBHOOK_SECRET_REF = "env:NETSUITE_WEBHOOK_SECRET"
+NETSUITE_CREDENTIALS = {
+    "account_id": "TSTDRV1458972",
+    "consumer_key": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "token_id": "90f8e7d6c5b4a3920817f6e5d4c3b2a1",
+}
+# NetSuite TBA: the adapter reads both components from one JSON secret.
+NETSUITE_TBA_SECRET = json.dumps(
+    {
+        "consumer_secret": "7c1f9a4b2e8d46a3b5c0e9f1a7d2b4c6",
+        "token_secret": "a3b5c0e9f1a7d2b4c67c1f9a4b2e8d46",
+    }
+)
+
+RESELLER_MOCK_URL = "http://127.0.0.1:8090/hooks"
 
 
 def _jsonrpc(service: str, method: str, args: list[Any]) -> Any:
@@ -69,7 +82,7 @@ def _jsonrpc(service: str, method: str, args: list[Any]) -> Any:
         }
     ).encode("utf-8")
     request = urllib.request.Request(
-        _ODOO_URL.rstrip("/") + "/jsonrpc",
+        ODOO_URL.rstrip("/") + "/jsonrpc",
         data=body,
         headers={"Content-Type": "application/json"},
         method="POST",
@@ -84,7 +97,7 @@ def _jsonrpc(service: str, method: str, args: list[Any]) -> Any:
 
 
 def _authenticate() -> int:
-    uid = _jsonrpc("common", "authenticate", [_ODOO_DB, _ODOO_USER, _ODOO_PASSWORD, {}])
+    uid = _jsonrpc("common", "authenticate", [ODOO_DB, ODOO_USER, ODOO_PASSWORD, {}])
     if not uid:
         raise RuntimeError("Odoo authentication failed (admin/admin)")
     return int(uid)
@@ -94,17 +107,17 @@ def _execute(
     uid: int, model: str, method: str, args: list[Any], kwargs: dict[str, Any] | None = None
 ) -> Any:
     return _jsonrpc(
-        "object", "execute_kw", [_ODOO_DB, uid, _ODOO_PASSWORD, model, method, args, kwargs or {}]
+        "object", "execute_kw", [ODOO_DB, uid, ODOO_PASSWORD, model, method, args, kwargs or {}]
     )
 
 
 def _seed_odoo() -> str:
-    """Returns the reseller partner's Odoo id, as a string, for the Postgres binding."""
+    """Returns the reseller partner's Odoo id, as a string, for the binding."""
     uid = _authenticate()
-    _execute(uid, "res.company", "write", [[1], {"name": _SUBSIDIARY_NAME}])
+    _execute(uid, "res.company", "write", [[1], {"name": ODOO_SUBSIDIARY_NAME}])
 
     partner_ids = _execute(
-        uid, "res.partner", "search", [[["name", "=", _RESELLER_NAME]]], {"limit": 1}
+        uid, "res.partner", "search", [[["name", "=", RESELLER_NAME]]], {"limit": 1}
     )
     if partner_ids:
         partner_id = int(partner_ids[0])
@@ -114,12 +127,12 @@ def _seed_odoo() -> str:
                 uid,
                 "res.partner",
                 "create",
-                [{"name": _RESELLER_NAME, "company_type": "company", "customer_rank": 1}],
+                [{"name": RESELLER_NAME, "company_type": "company", "customer_rank": 1}],
             )
         )
 
     product_ids: dict[str, int] = {}
-    for code, name, price, _qty in _PRODUCTS:
+    for code, name, price, _qty in PRODUCTS:
         found = _execute(
             uid, "product.product", "search", [[["default_code", "=", code]]], {"limit": 1}
         )
@@ -136,12 +149,12 @@ def _seed_odoo() -> str:
             )
 
     existing_order = _execute(
-        uid, "sale.order", "search", [[["client_order_ref", "=", _PO_REFERENCE]]], {"limit": 1}
+        uid, "sale.order", "search", [[["client_order_ref", "=", ODOO_PO_REFERENCE]]], {"limit": 1}
     )
     if not existing_order:
         order_lines = [
             (0, 0, {"product_id": product_ids[code], "product_uom_qty": qty})
-            for code, _name, _price, qty in _PRODUCTS
+            for code, _name, _price, qty in PRODUCTS
         ]
         order_id = _execute(
             uid,
@@ -150,7 +163,7 @@ def _seed_odoo() -> str:
             [
                 {
                     "partner_id": partner_id,
-                    "client_order_ref": _PO_REFERENCE,
+                    "client_order_ref": ODOO_PO_REFERENCE,
                     "order_line": order_lines,
                 }
             ],
@@ -160,123 +173,168 @@ def _seed_odoo() -> str:
     return str(partner_id)
 
 
-_STATEMENTS = [
-    text(
-        """
-        INSERT INTO erp_connections
-            (connection_id, erp_type, instance_label, base_url, credentials, secret_ref,
-             webhook_secret_ref, status)
-        VALUES
-            ('conn_odoo_local', 'ODOO', 'Odoo', :odoo_url,
-             '{"database":"odoo","username":"admin"}'::jsonb,
-             :login_secret, :webhook_secret, 'ACTIVE')
-        ON CONFLICT (connection_id) DO UPDATE SET
-            instance_label = EXCLUDED.instance_label,
-            base_url = EXCLUDED.base_url,
-            credentials = EXCLUDED.credentials,
-            secret_ref = EXCLUDED.secret_ref,
-            webhook_secret_ref = EXCLUDED.webhook_secret_ref
-        """
-    ),
-    text(
-        """
-        INSERT INTO resellers (tenant_id, name)
-        VALUES ('tnt_demo', :reseller_name)
-        ON CONFLICT (tenant_id) DO UPDATE SET name = EXCLUDED.name
-        """
-    ),
-    text(
-        """
-        INSERT INTO tenant_connection_bindings
-            (binding_id, tenant_id, connection_id, erp_customer_id, status)
-        VALUES
-            ('bind_demo', 'tnt_demo', 'conn_odoo_local', :erp_customer_id, 'VERIFIED')
-        ON CONFLICT (binding_id) DO UPDATE SET erp_customer_id = EXCLUDED.erp_customer_id
-        """
-    ),
-    text(
-        """
-        INSERT INTO subsidiaries (subsidiary_id, name, country, language)
-        VALUES ('sub_demo', :subsidiary_name, 'US', 'en_US')
-        ON CONFLICT (subsidiary_id) DO UPDATE SET name = EXCLUDED.name
-        """
-    ),
-    text(
-        """
-        INSERT INTO subsidiary_routes (subsidiary_id, connection_id, erp_company_id)
-        VALUES ('sub_demo', 'conn_odoo_local', '1')
-        ON CONFLICT (subsidiary_id) DO UPDATE SET
-            connection_id = EXCLUDED.connection_id,
-            erp_company_id = EXCLUDED.erp_company_id
-        """
-    ),
-    text(
-        """
-        INSERT INTO webhook_endpoints
-            (endpoint_id, tenant_id, name, url, secret_ref, event_types, is_active)
-        VALUES
-            (:endpoint_id, 'tnt_demo', 'Local reseller mock', :mock_url, :endpoint_secret,
-             NULL, TRUE)
-        ON CONFLICT (endpoint_id) DO UPDATE SET
-            name = EXCLUDED.name,
-            url = EXCLUDED.url,
-            secret_ref = EXCLUDED.secret_ref,
-            is_active = TRUE
-        """
-    ),
-]
-
-
-def _put_secrets(outbound_refs: list[str]) -> None:
-    endpoint = os.environ.get("AWS_ENDPOINT_URL")
-    if not endpoint:
-        print("AWS_ENDPOINT_URL is unset — Odoo login secret was not stored")
-        return
-    store = SecretsManagerSecretStore(
-        endpoint_url=endpoint, region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+def _access_token() -> str:
+    """The demo operator's Keycloak token. Its tenant_id claim scopes every call below."""
+    body = urllib.parse.urlencode(
+        {
+            "grant_type": "password",
+            "client_id": KEYCLOAK_CLIENT_ID,
+            "username": SEED_USER,
+            "password": SEED_PASSWORD,
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        f"{KEYCLOAK_REALM_URL}/protocol/openid-connect/token",
+        data=body,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
     )
-    store.put_secret(_LOGIN_SECRET, "admin")
-    store.put_secret(_WEBHOOK_SECRET, "odoo-webhook-demo")
-    store.put_secret(_RESELLER_ENDPOINT_SECRET, _OUTBOUND_WEBHOOK_SECRET)
-    restored = 0
-    for secret_ref in outbound_refs:
-        try:
-            store.get_secret(secret_ref)
-        except SecretNotFound:
-            store.put_secret(secret_ref, _OUTBOUND_WEBHOOK_SECRET)
-            restored += 1
-    if restored:
-        print(f"restored {restored} outbound webhook signing secret(s)")
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return str(json.loads(response.read())["access_token"])
+
+
+def _gql(path: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    body = json.dumps({"query": query, "variables": variables}).encode("utf-8")
+    request = urllib.request.Request(
+        f"{API_URL}{path}",
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {_access_token()}",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+        parsed = json.loads(response.read())
+    if parsed.get("errors"):
+        raise RuntimeError(f"GraphQL error on {path}: {parsed['errors'][0]['message']}")
+    return parsed["data"]
+
+
+def _operator(query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    return _gql("/graphql/operator", query, variables)
+
+
+_REGISTER_CONNECTION = """
+mutation($erpType: String!, $label: String!, $baseUrl: String!, $credentials: JSON!,
+         $secret: String!, $webhookSecretRef: String!) {
+  registerConnection(erpType: $erpType, instanceLabel: $label, baseUrl: $baseUrl,
+    credentials: $credentials,
+    auth: { authType: "NONE", params: {}, secret: $secret },
+    webhookSecretRef: $webhookSecretRef) { connectionId }
+}
+"""
+_CREATE_BINDING = """
+mutation($connectionId: String!, $erpCustomerId: String!, $name: String!) {
+  createBinding(tenantId: "tnt_demo", connectionId: $connectionId,
+    erpCustomerId: $erpCustomerId, name: $name) { bindingId }
+}
+"""
+_VERIFY_BINDING = """
+mutation($bindingId: String!) { verifyBinding(bindingId: $bindingId) { bindingId } }
+"""
+_CREATE_SUBSIDIARY = """
+mutation($name: String!) {
+  createSubsidiary(name: $name, country: "US", language: "en_US") { subsidiaryId }
+}
+"""
+_SET_ERP_ROUTE = """
+mutation($subsidiaryId: String!, $connectionId: String!, $erpCompanyId: String!) {
+  setErpRoute(subsidiaryId: $subsidiaryId, connectionId: $connectionId,
+    erpCompanyId: $erpCompanyId) { subsidiaryId }
+}
+"""
+_RENAME_RESELLER = """
+mutation($name: String!) { renameReseller(tenantId: "tnt_demo", name: $name) { tenantId } }
+"""
+_REGISTER_WEBHOOK = """
+mutation($name: String!, $url: String!) {
+  registerWebhookEndpoint(name: $name, url: $url) { signingSecret }
+}
+"""
+
+
+def _seed_operator(odoo_partner_id: str) -> None:
+    _operator(_RENAME_RESELLER, {"name": RESELLER_NAME})
+
+    odoo = _operator(
+        _REGISTER_CONNECTION,
+        {
+            "erpType": "ODOO",
+            "label": "Odoo",
+            "baseUrl": ODOO_URL,
+            "credentials": {"database": ODOO_DB, "username": ODOO_USER},
+            "secret": ODOO_PASSWORD,
+            "webhookSecretRef": ODOO_WEBHOOK_SECRET_REF,
+        },
+    )["registerConnection"]
+    odoo_id = odoo["connectionId"]
+    binding = _operator(
+        _CREATE_BINDING,
+        {"connectionId": odoo_id, "erpCustomerId": odoo_partner_id, "name": RESELLER_NAME},
+    )["createBinding"]
+    _operator(_VERIFY_BINDING, {"bindingId": binding["bindingId"]})
+    subsidiary = _operator(_CREATE_SUBSIDIARY, {"name": ODOO_SUBSIDIARY_NAME})["createSubsidiary"]
+    _operator(
+        _SET_ERP_ROUTE,
+        {"subsidiaryId": subsidiary["subsidiaryId"], "connectionId": odoo_id, "erpCompanyId": "1"},
+    )
+
+    netsuite = _operator(
+        _REGISTER_CONNECTION,
+        {
+            "erpType": "NETSUITE",
+            "label": "NetSuite",
+            "baseUrl": NETSUITE_URL,
+            "credentials": NETSUITE_CREDENTIALS,
+            "secret": NETSUITE_TBA_SECRET,
+            "webhookSecretRef": NETSUITE_WEBHOOK_SECRET_REF,
+        },
+    )["registerConnection"]
+    netsuite_id = netsuite["connectionId"]
+    binding = _operator(
+        _CREATE_BINDING,
+        {
+            "connectionId": netsuite_id,
+            "erpCustomerId": NETSUITE_CUSTOMER_ID,
+            "name": RESELLER_NAME,
+        },
+    )["createBinding"]
+    _operator(_VERIFY_BINDING, {"bindingId": binding["bindingId"]})
+    subsidiary = _operator(_CREATE_SUBSIDIARY, {"name": NETSUITE_SUBSIDIARY_NAME})[
+        "createSubsidiary"
+    ]
+    _operator(
+        _SET_ERP_ROUTE,
+        {
+            "subsidiaryId": subsidiary["subsidiaryId"],
+            "connectionId": netsuite_id,
+            "erpCompanyId": "NS1",
+        },
+    )
+
+    print(f"connections: Odoo {odoo_id} (partner {odoo_partner_id}), NetSuite {netsuite_id}")
+    odoo_secret = os.environ.get("ODOO_WEBHOOK_SECRET", "odoo-webhook-demo")
+    print(f"odoo webhook: {API_URL}/erp/webhook/{odoo_id}/{odoo_secret}")
+
+
+def _seed_reseller() -> None:
+    data = _gql(
+        "/graphql/reseller",
+        _REGISTER_WEBHOOK,
+        {"name": "Local reseller mock", "url": RESELLER_MOCK_URL},
+    )
+    RESELLER_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
+    secret = data["registerWebhookEndpoint"]["signingSecret"]
+    RESELLER_SECRET_FILE.write_text(secret, encoding="utf-8")
+    print(f"reseller webhook -> {RESELLER_MOCK_URL} (secret in {RESELLER_SECRET_FILE})")
 
 
 def main() -> None:
-    url = os.environ.get(
-        "DATABASE_URL", "postgresql+psycopg2://portal:portal@localhost:5432/portal"
-    )
-    erp_customer_id = _seed_odoo()
-    engine = create_engine(url, future=True)
-    params = {
-        "odoo_url": _ODOO_URL,
-        "login_secret": _LOGIN_SECRET,
-        "webhook_secret": _WEBHOOK_SECRET,
-        "erp_customer_id": erp_customer_id,
-        "subsidiary_name": _SUBSIDIARY_NAME,
-        "reseller_name": _RESELLER_NAME,
-        "endpoint_id": _RESELLER_ENDPOINT_ID,
-        "mock_url": _RESELLER_MOCK_URL,
-        "endpoint_secret": _RESELLER_ENDPOINT_SECRET,
-    }
-    with engine.begin() as connection:
-        for statement in _STATEMENTS:
-            connection.execute(statement, params)
-        outbound_refs = [
-            row[0] for row in connection.execute(text("SELECT secret_ref FROM webhook_endpoints"))
-        ]
-    _put_secrets(outbound_refs)
-    print(
-        f"demo data seeded (connection, binding -> Odoo partner {erp_customer_id}, "
-        f"subsidiary, reseller webhook {_RESELLER_ENDPOINT_ID} -> {_RESELLER_MOCK_URL})"
-    )
+    partner_id = os.environ.get("ODOO_PARTNER_ID") or _seed_odoo()
+    _seed_operator(partner_id)
+    _seed_reseller()
+    print("demo data seeded")
 
 
 if __name__ == "__main__":
