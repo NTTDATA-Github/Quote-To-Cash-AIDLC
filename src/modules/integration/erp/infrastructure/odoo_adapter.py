@@ -1,7 +1,7 @@
 """Real Odoo adapter (JSON-RPC) implementing the ErpAdapter port.
 
 Stdlib-only client with explicit timeouts and transient/terminal error classification
-(RESILIENCY-10). Exercised against a live Odoo (docker/floci stack); not run in the
+(RESILIENCY-10). Exercised against a live Odoo (docker stack); not run in the
 offline sandbox. Pure payload building is unit-testable without a server.
 """
 

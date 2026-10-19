@@ -27,7 +27,7 @@ def upgrade() -> None:
             tenant_id    TEXT NOT NULL,
             name         TEXT NOT NULL,
             url          TEXT NOT NULL,
-            secret_ref   TEXT NOT NULL,      -- Secrets Manager ref, app-generated at registration
+            secret_ref   TEXT NOT NULL,      -- secret store ref, app-generated at registration
             event_types  JSONB,              -- null = subscribe to every dispatchable event
             is_active    BOOLEAN NOT NULL DEFAULT TRUE,
             created_at   TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -6,8 +6,8 @@ root as the memory profile. Self-skips like `test_postgres_adapters.py` when Pos
 deps aren't reachable.
 
 Scope: routing (`order_processor`) only, not delivery. `DeliveryHandler` resolves a
-connection's secret via `SecretsManagerSecretStore` (boto3 -> Secrets Manager/floci),
-which isn't up in this check — that needs floci and belongs to item I (full E2E
+connection's secret via the Key Vault store,
+which isn't up in this check — that needs Azure and belongs to the full E2E
 verification), not this composition-wiring check.
 """
 

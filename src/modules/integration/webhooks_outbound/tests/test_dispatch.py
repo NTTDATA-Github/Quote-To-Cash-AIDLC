@@ -204,7 +204,7 @@ def test_transient_failure_raises_for_redrive_and_stays_retrying() -> None:
 
 
 def test_exhausted_retries_marks_failed_and_stops_raising() -> None:
-    """Simulates SQS redriving the same message MAX_ATTEMPTS times."""
+    """Simulates Service Bus redelivering the same message MAX_ATTEMPTS times."""
     endpoints = InMemoryWebhookEndpointRepository()
     secrets = EnvSecretStore()
     endpoint = _register_endpoint(endpoints, secrets)

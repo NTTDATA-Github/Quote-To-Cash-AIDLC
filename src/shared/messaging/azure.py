@@ -1,12 +1,12 @@
 """Azure Service Bus adapter (ADR-0023) — implements the `EventPublisher` port + a
-consumer, the Azure counterpart to `aws.py`'s SNS/SQS adapter.
+consumer.
 
-FIFO equivalence: `session_id=event.stream_id` (today's SNS `MessageGroupId`) plus the
+Ordering: `session_id=event.stream_id` plus the
 topic's `support_ordering=true` (see `infra/azure/modules/messaging`). Routing:
 `eventType` becomes a message application property, matched by each subscription's SQL
-filter instead of an SNS filter policy. There is no entity-level dedup (Service Bus
-`requires_duplicate_detection=false`, same as SNS's `content_based_deduplication=false`) —
-redelivery is handled the same way it already is on the AWS path: the worker's
+filter. There is no entity-level dedup (Service Bus
+`requires_duplicate_detection=false`) —
+redelivery is handled by the worker's
 `_dedupe` wrapper (`src/worker/main.py`) against `processed_events`, not by the transport.
 """
 
@@ -96,7 +96,7 @@ class ServiceBusConsumerRunner:
     On success the message is completed (deleted); on handler error it is abandoned, left
     for Service Bus to redeliver, and after `max_delivery_count` it lands in that
     subscription's built-in dead-letter sub-queue. Handlers must be idempotent (dedupe on
-    event_id) because delivery is at-least-once, same contract as the SQS adapter.
+    event_id) because delivery is at-least-once.
     """
 
     def __init__(
@@ -156,7 +156,7 @@ class ServiceBusConsumerRunner:
                     receiver.complete_message(message)
                     processed += 1
         except (OperationTimeoutError, ServiceBusError):
-            return 0  # no session has a message ready right now — same as an empty SQS poll
+            return 0  # no session has a message ready right now
         return processed
 
     def run_forever(self) -> None:  # pragma: no cover - long-running loop

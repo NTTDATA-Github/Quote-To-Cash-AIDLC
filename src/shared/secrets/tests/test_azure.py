@@ -58,8 +58,8 @@ def test_missing_secret_raises_secret_not_found() -> None:
 
 
 def test_put_overwrites_an_existing_secret_in_one_call() -> None:
-    """`set_secret` creates-or-overwrites — unlike Secrets Manager, there is no separate
-    create/update path to exercise here."""
+    """`set_secret` creates-or-overwrites, so there is no separate create/update path to
+    exercise here."""
     client = _FakeClient()
     store = KeyVaultSecretStore("https://vault.example/", client=client)
 

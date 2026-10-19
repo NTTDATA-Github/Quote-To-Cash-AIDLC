@@ -1,6 +1,6 @@
 """Unit tests for `EntraIdentityProvider`'s verification logic — fast, no network.
 
-Same shape as `test_cognito.py`: a locally-generated RSA keypair stands in for Entra's,
+A locally-generated RSA keypair stands in for Entra's,
 and a fake `jwk_client` (the same injection point production code uses) returns its
 public key instead of fetching one over HTTP.
 """

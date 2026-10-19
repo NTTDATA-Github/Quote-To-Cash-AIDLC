@@ -36,7 +36,7 @@ Each block says why it exists, how to see that it is already done, and what to d
 
 **If those pages open:** do nothing.
 
-**If they do not:** `bash scripts/local.sh up`. That starts Postgres, Floci, Odoo, the API, the worker, and AdminOps. It does not wipe the database.
+**If they do not:** `bash scripts/local.sh up`. That starts Odoo, Keycloak, the API, the mocks, and AdminOps. The API reseeds the demo on each start.
 
 ### 2. Connection, reseller, and subsidiary
 

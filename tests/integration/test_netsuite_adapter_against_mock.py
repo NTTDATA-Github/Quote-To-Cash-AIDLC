@@ -5,7 +5,7 @@ Unlike the unit tests (which mock the HTTP seam), this exercises the whole stack
 live NetSuite would: TBA signing, the SuiteTalk REST URL shapes, the `204 + Location` create
 contract, external-id idempotency, SuiteQL reads, and record transforms. The mock
 *independently* re-verifies the OAuth signature, so a green run proves the adapter signs
-correctly — not merely that it sends a header. Needs no Postgres/floci/AWS: pure stdlib +
+correctly — not merely that it sends a header. Needs no Postgres or cloud services: pure stdlib +
 loopback sockets, so it runs in the offline gate (no self-skip).
 
 This is the "plug and play" proof: the only difference between this and a live NetSuite is

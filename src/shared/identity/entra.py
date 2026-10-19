@@ -1,8 +1,8 @@
-"""Entra External ID JWT verification (ADR-0023) — the Azure counterpart to `cognito.py`.
+"""Entra External ID JWT verification (ADR-0023).
 
-Single token shape, unlike Cognito's id-vs-access split: the SPA (MSAL) always presents an
+Single token shape: the SPA (MSAL) always presents an
 access token with `aud` = this app's client id and `roles` = the app roles assigned to the
-signed-in user (Entra's equivalent of `cognito:groups`) — there is no separate user-pool
+signed-in user — there is no separate
 "ID token" concept here, and this project has no machine-to-machine caller on the Azure
 path yet, so there's no second shape to handle.
 

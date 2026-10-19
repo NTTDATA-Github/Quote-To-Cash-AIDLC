@@ -51,9 +51,9 @@ class ConnectionService:
         webhook_secret_ref: str | None = None,
     ) -> ErpConnection:
         """`secret` is the raw credential (password/API key/token) — generated into a
-        Secrets Manager reference here, same discipline as `WebhookEndpointService`
+        secret store reference here, same discipline as `WebhookEndpointService`
         (ADR-0021); the operator never hand-pastes a `secret_ref`. `auth_type="NONE"`
-        (the only case with nothing to protect) skips Secrets Manager entirely rather
+        (the only case with nothing to protect) skips the secret store entirely rather
         than writing an empty value it would reject.
 
         Validates the free-typed fields a typo most often lands in: a connection with a

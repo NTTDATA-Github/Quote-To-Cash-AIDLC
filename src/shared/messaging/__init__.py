@@ -2,7 +2,7 @@
 
 `EventPublisher` (the port the repository/relay call) is re-exported from the kernel.
 `InMemoryMessageBus` is the local/test implementation modeling topic -> queues -> DLQ.
-Production adds an SNS/SQS adapter (boto3, targeting floci locally and AWS in prod)
+Production adds the Azure Service Bus adapter (azure-servicebus)
 implementing the same port + a consumer runner — see application-design/messaging-topology.md.
 """
 

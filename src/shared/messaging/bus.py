@@ -1,12 +1,11 @@
 """In-memory message bus.
 
-Models the production topology (SNS FIFO topic -> filtered SQS FIFO queues -> consumers,
-with per-consumer dedup and redrive-to-DLQ) without any cloud dependency, so unit and
-integration tests are deterministic. Production swaps in an SNS/SQS adapter behind the
-same `EventPublisher` port + a `MessageConsumer` runner; the AWS adapter targets floci
-locally and real AWS in prod using identical boto3 code.
+Models the production topology (Service Bus topic -> filtered subscriptions -> consumers,
+with per-consumer dedup and redelivery to a dead-letter queue) without any cloud
+dependency, so unit and integration tests are deterministic. Production swaps in the Azure
+Service Bus adapter behind the same `EventPublisher` port + a `MessageConsumer` runner.
 
-Simplifications vs real SQS (documented on purpose):
+Simplifications vs the real broker (documented on purpose):
 - Delivery is driven explicitly via `run_until_empty()` (no background threads) for
   deterministic tests.
 - Ordering is preserved by enqueue order per subscription (good enough to model

@@ -32,10 +32,10 @@ class ErpConnection:
     adapter registry at query time — see `composition.py`'s `has_adapter`), never stored
     here.
 
-    `secret_ref` is a Secrets Manager reference — never the raw credential (SECURITY-12).
+    `secret_ref` is a secret store reference — never the raw credential (SECURITY-12).
     `instance_label` is operator-only and must never reach a reseller surface (FR-19).
 
-    `webhook_secret_ref` is a SEPARATE Secrets Manager reference from `secret_ref`: the
+    `webhook_secret_ref` is a SEPARATE secret store reference from `secret_ref`: the
     former is our credential for logging into the ERP, the latter is the credential the
     ERP uses to prove a webhook call came from it. Reusing one secret for both would mean
     a leaked webhook URL (which, for Odoo's shared-secret-in-path scheme, is the ERP admin

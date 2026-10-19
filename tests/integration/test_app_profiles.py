@@ -33,7 +33,7 @@ def _id(prefix: str) -> str:
 
 def _app(profile: str):
     os.environ["APP_PROFILE"] = profile
-    os.environ["ERP_ADAPTER_MODE"] = "stub"  # no live Odoo/floci in this check
+    os.environ["ERP_ADAPTER_MODE"] = "stub"  # no live Odoo in this check
     get_settings.cache_clear()  # get_settings() is lru_cached — must re-read the new profile
     from src.api.app import create_app
 

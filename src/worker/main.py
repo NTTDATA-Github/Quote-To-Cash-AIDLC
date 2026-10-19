@@ -128,9 +128,9 @@ def _open_orders_provider(session_factory: sessionmaker[Session]):
 
 def _run_mapping_poll(container, stop: threading.Event) -> None:  # type: ignore[no-untyped-def]
     """Poll the `mapping_jobs` table for PENDING proposal jobs and run them through the
-    LLM (`container.mapping_proposer`). A polling loop, not an SQS consumer: these are
-    manual, low-volume, per-new-ERP runs, and the former standalone service worked the
-    same way. Sleeps only when it finds nothing, so a backlog drains promptly."""
+    LLM (`container.mapping_proposer`). A polling loop, not a message consumer: these are
+    manual, low-volume, per-new-ERP runs. Sleeps only when it finds nothing, so a backlog
+    drains promptly."""
     while not stop.is_set():
         try:
             processed = process_pending_jobs(container.mapping_jobs, container.mapping_proposer)

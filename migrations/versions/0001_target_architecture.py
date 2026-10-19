@@ -75,7 +75,7 @@ def upgrade() -> None:
             base_url       TEXT NOT NULL,
             database       TEXT NOT NULL,
             username       TEXT NOT NULL,
-            secret_ref     TEXT NOT NULL,          -- Secrets Manager ARN, never a raw credential
+            secret_ref     TEXT NOT NULL,          -- secret store reference, never a raw credential
             status         TEXT NOT NULL DEFAULT 'ACTIVE'
         );
 

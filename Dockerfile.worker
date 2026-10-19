@@ -1,4 +1,4 @@
-# Worker host — SQS FIFO consumers + outbox relay + reconcile scheduler.
+# Worker host — Service Bus consumers + outbox relay + reconcile scheduler.
 # Identical build to Dockerfile.api; different CMD and no exposed port (the worker is a
 # pure background process — no HTTP surface, so no HEALTHCHECK endpoint either).
 FROM python:3.11-slim AS base

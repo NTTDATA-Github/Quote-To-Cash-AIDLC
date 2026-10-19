@@ -396,7 +396,7 @@ class Mutation:
         `database`/`username`. `auth` is read only by the onboarding probe for a
         connection with no adapter yet (ADR-0021): `auth.params` merge into the same
         `credentials` bag, `auth.authType` is stored alongside it, and `auth.secret` is
-        the raw credential (password/API key/token) — generated into Secrets Manager
+        the raw credential (password/API key/token) — generated into Key Vault
         here, never hand-pasted as a `secretRef`."""
         ctx = info.context
         ctx.require_role("OPERATOR")

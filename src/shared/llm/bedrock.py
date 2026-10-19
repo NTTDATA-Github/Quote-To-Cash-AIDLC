@@ -32,21 +32,19 @@ class BedrockLlmClient:
 
     def _runtime(self) -> object:
         if self._client is None:
-            # No endpoint_url: in prod there is no AWS_ENDPOINT_URL, so this is real Bedrock.
-            # Locally that variable points every boto3 client at Floci, which stubs this call.
+            # No endpoint_url, so boto3 talks to real Bedrock.
             self._client = boto3.client("bedrock-runtime", region_name=self._region_name)
         return self._client
 
     def ask(self, system: str, user: str, max_tokens: int = _MAX_TOKENS) -> str:
         token = os.environ.get("AWS_BEARER_TOKEN_BEDROCK", "").strip()
         if token:
-            # Bearer auth goes to the real Converse endpoint. The dummy local AWS keys
-            # cannot sign that request, and AWS_ENDPOINT_URL would send boto3 to Floci.
+            # Bearer auth goes to the real Converse endpoint.
             return self._ask_bearer(token, system, user, max_tokens)
         if os.environ.get("AWS_ENDPOINT_URL"):
             raise RuntimeError(
-                "AWS_ENDPOINT_URL sends Bedrock to the local emulator, which returns a stub "
-                "instead of a mapping. Set AWS_BEARER_TOKEN_BEDROCK to call the real Converse API."
+                "AWS_ENDPOINT_URL sends Bedrock to a non-AWS endpoint, which doesn't serve real "
+                "mappings. Set AWS_BEARER_TOKEN_BEDROCK to call the real Converse API."
             )
         response = self._runtime().converse(  # type: ignore[attr-defined]
             modelId=self._model_id,

@@ -3,8 +3,8 @@ event sourcing. Per ADR-0002, these domains' rows are the source of truth, not a
 log; nothing here replays or reconstructs state from facts. This exists so other domains
 can react to a change (a connection paused, an item's price changed) without polling or a
 direct synchronous call into these modules — reusing the exact same transport Order's own
-events already use (outbox -> SNS FIFO -> SQS, or the in-memory bus locally). No new
-infrastructure: `platform-domain-events.fifo` already carries every event type; a new
+events already use (outbox -> Service Bus topic -> subscriptions, or the in-memory bus
+locally). No new infrastructure: `platform-domain-events` already carries every event type; a new
 event type just means no queue's filter policy matches it yet, until one is added.
 
 ponytail: `OutboxFactPublisher.publish` commits in its own transaction, separate from the
@@ -73,7 +73,7 @@ class BusFactPublisher:
 
 
 class OutboxFactPublisher:
-    """Postgres profile: write directly into `outbox` — the same table/relay/SNS path
+    """Postgres profile: write directly into `outbox` — the same table/relay/topic path
     `PostgresEventStore` uses for `Order`, just without a corresponding `events` row
     (there's nothing to replay for a plain-CRUD fact)."""
 

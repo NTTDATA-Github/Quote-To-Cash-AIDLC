@@ -230,7 +230,7 @@ class AuthConfigInput:
     `AuthType`'s values (NONE | API_KEY_HEADER | BASIC | BEARER_TOKEN) — declarative auth
     only; anything needing a handshake or a redirect UI isn't supported here yet, use the
     manual sample-file upload (`submitMapping`) instead. `secret` is write-only: it goes
-    straight into Secrets Manager and is never echoed back."""
+    straight into Key Vault and is never echoed back."""
 
     auth_type: str
     params: strawberry.scalars.JSON

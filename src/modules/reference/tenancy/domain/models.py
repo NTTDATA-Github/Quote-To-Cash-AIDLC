@@ -37,7 +37,7 @@ class TenantConnectionBinding:
 @dataclass
 class Reseller:
     """Display name for a tenant_id (business-facing). `tenant_id` stays the stable,
-    opaque partition key used everywhere else (RLS, Cognito's `custom:tenant_id`, webhook
+    opaque partition key used everywhere else (RLS, the tenant_id claim, webhook
     URLs) — this is purely the human-readable label the UI shows instead, the same role
     `Subsidiary.name` plays for the operator's own side."""
 

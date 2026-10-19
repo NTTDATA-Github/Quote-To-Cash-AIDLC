@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from src.shared.types import TenantId, WebhookEndpointId
 
 # The only event types actually routed to webhook-dispatch.fifo (messaging-topology.md's
-# locked SNS filter policy) — an endpoint's `event_types` is a subset of this, or None
+# locked subscription filter) — an endpoint's `event_types` is a subset of this, or None
 # for "all of these".
 DISPATCHABLE_EVENT_TYPES = frozenset(
     {
@@ -67,7 +67,7 @@ class WebhookDelivery:
     """One (endpoint, event) delivery attempt record, updated in place across retries —
     not one row per HTTP attempt. `attempts` mirrors messaging-topology.md's locked
     `maxReceiveCount=5`: once it hits that, the delivery is FAILED even though the
-    underlying SQS message also lands in `webhook-dispatch-dlq.fifo` around the same
+    underlying message also lands in the dead-letter queue around the same
     time — two views of the same limit, not two separate policies to keep in sync."""
 
     delivery_id: str

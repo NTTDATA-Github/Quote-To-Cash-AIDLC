@@ -4,7 +4,7 @@ Bridges modules to each other's ports (bindings, connection resolution) and sele
 infrastructure by `settings.profile`:
 - "memory": in-memory bus + event store, for local dev/tests (no infra),
 - "postgres": PostgresEventStore + Postgres repos/projection store + real/stub Odoo
-  adapter + Secrets Manager. The repo publishes nothing itself (PostgresEventStore writes
+  adapter + Key Vault. The repo publishes nothing itself (PostgresEventStore writes
   the outbox row in the same transaction as the event); the outbox relay and Service Bus consumers
   (worker, item C) do the async delivery. `order_processor` / `delivery_handler` /
   `order_projector` are exposed on the container so the worker can wire the same handler

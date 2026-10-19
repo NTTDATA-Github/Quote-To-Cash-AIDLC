@@ -4,8 +4,8 @@ Consumes any event in `DISPATCHABLE_EVENT_TYPES`, signs a payload per the design
 verification spec (WebhookEndpoints.dc.html: `X-Signature: t=<ts>,v1=<hmac>` over
 `"{ts}.{body}"`), and POSTs it to every active, subscribed endpoint for the event's tenant.
 
-One SQS message can fan out to several endpoints. If ANY of them still needs a retry, the
-whole handler raises so SQS redrives the message — which re-sends to every endpoint,
+One Service Bus message can fan out to several endpoints. If ANY of them still needs a retry, the
+whole handler raises so Service Bus redelivers the message — which re-sends to every endpoint,
 including ones that already succeeded. That's a real tradeoff (a receiver can see the same
 event twice), not an oversight: avoiding it needs per-endpoint retry state independent of
 the message's own redelivery, which is real, separable follow-up work. Webhook receivers
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     from .ports import WebhookDeliveryRepository, WebhookEndpointRepository, WebhookSender
 
-MAX_ATTEMPTS = 5  # mirrors messaging-topology.md's locked SQS maxReceiveCount
+MAX_ATTEMPTS = 5  # mirrors messaging-topology.md's locked max delivery count
 
 
 class OrderSummaryReader(Protocol):
@@ -43,7 +43,7 @@ class OrderSummaryReader(Protocol):
 
 
 class WebhookDeliveryRetry(Exception):
-    """Raised when at least one endpoint still needs a retry, so SQS redrives the message."""
+    """Raised when at least one endpoint still needs a retry, so Service Bus redelivers it."""
 
 
 class WebhookDispatchService:

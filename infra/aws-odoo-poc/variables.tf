@@ -9,7 +9,7 @@ variable "instance_type" {
   default     = "t3.small"
 }
 
-# POC convenience, same tradeoff the staging env already makes (see docs/deploy-aws.md):
+# POC convenience:
 # open to the internet behind a password only. Narrow to your IP (e.g. "1.2.3.4/32") for
 # anything beyond a throwaway demo.
 variable "allowed_cidr" {

@@ -1,7 +1,7 @@
 # Minimum viable Odoo on AWS: one EC2 box running Odoo + its own Postgres as two
 # Docker containers (the same odoo/odoo-db pair as the repo's docker-compose.yml).
-# No RDS, no ALB, no ECS, no ECR, no Secrets Manager, no custom VPC. Not the staging
-# path (infra/terraform) -- this is a throwaway POC: one instance, no HA, no backups.
+# A single instance with no RDS, load balancer, container service, or custom VPC. Not the
+# staging stack (infra/azure) -- this is a throwaway POC: one instance, no HA, no backups.
 
 data "aws_vpc" "default" {
   default = true

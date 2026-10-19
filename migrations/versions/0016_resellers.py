@@ -3,7 +3,7 @@
 Every other reference concept already splits a stable id from a human-facing name
 (`erp_connections.instance_label`, `subsidiaries.name`) — tenants were the one gap, so
 every "Reseller" column in the UI showed the raw `tenant_id` partition key. `tenant_id`
-stays exactly as-is everywhere else (RLS, Cognito's `custom:tenant_id`, webhook URLs);
+stays exactly as-is everywhere else (RLS, the tenant_id claim, webhook URLs);
 this table only adds the label.
 
 Backfilled from every tenant_id already bound to a connection, name defaulting to the

@@ -16,7 +16,7 @@ def discard_real_bedrock_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_bearer_token_calls_real_bedrock_not_the_local_endpoint(monkeypatch) -> None:
-    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://127.0.0.1:4566")
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://127.0.0.1:9")
     monkeypatch.setenv("AWS_BEARER_TOKEN_BEDROCK", _FAKE_TOKEN)
     captured: dict[str, str] = {}
 
@@ -39,6 +39,6 @@ def test_bearer_token_calls_real_bedrock_not_the_local_endpoint(monkeypatch) -> 
 
 
 def test_local_endpoint_without_a_bearer_token_does_not_call_the_emulator(monkeypatch) -> None:
-    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://127.0.0.1:4566")
+    monkeypatch.setenv("AWS_ENDPOINT_URL", "http://127.0.0.1:9")
     with pytest.raises(RuntimeError, match="AWS_BEARER_TOKEN_BEDROCK"):
         BedrockLlmClient("model", "us-east-1").ask("s", "u")

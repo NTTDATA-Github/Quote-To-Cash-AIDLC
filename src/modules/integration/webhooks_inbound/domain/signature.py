@@ -1,7 +1,7 @@
 """HMAC-SHA256 webhook signature (pure).
 
 Constant-time comparison prevents timing attacks. The signing secret is per-connection
-and resolved from Secrets Manager at the edge.
+and resolved from the secret store at the edge.
 """
 
 from __future__ import annotations

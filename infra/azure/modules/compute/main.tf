@@ -1,4 +1,4 @@
-# Container Apps environment + api/worker apps. Container Apps environment + apps (replaces ECS).
+# Container Apps environment + api/worker apps.
 # ALB/listeners/target groups/ACM — Container Apps' built-in ingress gives free TLS on
 # *.azurecontainerapps.io, so there is no ALB-equivalent resource here at all.
 

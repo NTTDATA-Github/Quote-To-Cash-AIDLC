@@ -1,10 +1,9 @@
 """Unit tests for the Service Bus adapter (ADR-0023).
 
 `azure-servicebus` isn't installed in every dev environment yet (it's a new dependency —
-see pyproject.toml); skip rather than fail where it's absent, same pattern as
-`test_cognito.py`'s `pytest.importorskip("cryptography")`. Once installed, these run for
-real against the SDK's own message/session types — no mocking of `azure.servicebus`
-itself, only of the network-touching `ServiceBusClient`.
+see pyproject.toml); skip rather than fail where it's absent, using `pytest.importorskip`.
+Once installed, these run for real against the SDK's own message/session types, with no
+mocking of `azure.servicebus` itself, only of the network-touching `ServiceBusClient`.
 """
 
 from __future__ import annotations

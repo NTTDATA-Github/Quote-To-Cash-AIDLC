@@ -5,12 +5,12 @@ self-administered, so it needs no tenant-admin permission at all).
 
 Single token shape, like Entra's: a direct-grant login always returns an access token
 with `tenant_id` and `roles` claims (realm protocol mappers — see
-`keycloak-realm-export.json`), both flat (no `custom:`/`cognito:` namespacing).
+`keycloak-realm-export.json`), both flat.
 
 Keycloak access tokens don't reliably carry this client's id in `aud` unless an explicit
 audience mapper is configured (we don't configure one) — `azp` (authorized party) is the
 claim Keycloak always sets to the client that requested the token, so that's what's
-checked instead, same reasoning as Cognito's access-token `client_id` check.
+checked instead.
 """
 
 from __future__ import annotations

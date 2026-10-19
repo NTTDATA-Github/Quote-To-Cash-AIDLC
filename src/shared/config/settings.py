@@ -65,7 +65,7 @@ class Settings:
     # every one, matching today's single-process behavior (ADR-0010's role split, Part 1)
     # OAuth scope namespace for client_credentials (M2M) tokens:
     # {this}/tenant.<id>, {this}/role.<ROLE>
-    cors_allowed_origins: list[str]  # the UI's origin(s) — e.g. an S3/CloudFront URL in prod
+    cors_allowed_origins: list[str]  # the UI's origin(s), e.g. the Front Door URL in prod
     # ERP field-mapping proposer (operator AdminOps "ERP mapping" tab):
     # the Bedrock model the `mapping` worker calls, and the base URL of the separate
     # erp-agent-service the "approve & implement" action hands an approved mapping to.

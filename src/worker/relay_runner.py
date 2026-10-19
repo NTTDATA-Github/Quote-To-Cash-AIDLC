@@ -1,4 +1,4 @@
-"""Runs the outbox relay in a loop (Postgres outbox -> SNS FIFO)."""
+"""Runs the outbox relay in a loop (Postgres outbox -> Service Bus)."""
 
 from __future__ import annotations
 

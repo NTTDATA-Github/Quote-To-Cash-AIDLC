@@ -1,6 +1,6 @@
 """Unit tests for `KeycloakIdentityProvider`'s verification logic — fast, no network.
 
-Same shape as `test_entra.py`/`test_cognito.py`: a locally-generated RSA keypair stands
+A locally-generated RSA keypair stands
 in for Keycloak's, and a fake `jwk_client` returns its public key instead of fetching one
 over HTTP.
 """

@@ -60,6 +60,5 @@ class KeyVaultSecretStore:
         return str(secret.value)
 
     def put_secret(self, secret_ref: str, value: str) -> None:
-        # `set_secret` creates-or-overwrites in one call — no separate create/update
-        # dance like Secrets Manager's create_secret/put_secret_value needs.
+        # `set_secret` creates-or-overwrites in one call.
         self._client.set_secret(_vault_name(secret_ref), value)

@@ -1,6 +1,5 @@
 /**
- * Raw Keycloak token-endpoint calls, no adapter library — same reasoning as
- * `cognitoAuth.ts`: Keycloak's direct-grant (Resource Owner Password Credentials) flow is
+ * Raw Keycloak token-endpoint calls, no adapter library: Keycloak's direct-grant (Resource Owner Password Credentials) flow is
  * a plain form-encoded POST a public client is designed to call straight from a browser,
  * no client secret involved (`o2c-portal` is `publicClient: true`,
  * `directAccessGrantsEnabled: true` — see `keycloak-realm-export.json`).
@@ -88,7 +87,7 @@ export async function refreshSession(config: KeycloakConfig, refreshToken: strin
 /** Decode-only (no signature check — the backend re-verifies every request against
  * Keycloak's JWKS; this is purely for UI display: whose tenant, which roles, and the
  * identity shown in the user menu). `tenant_id`/`roles` are flat claims (realm protocol
- * mappers), unlike Cognito's `custom:`/`cognito:` namespacing. */
+ * mappers). */
 export function decodeIdTokenClaims(idToken: string): {
   tenantId: string | null;
   roles: string[];

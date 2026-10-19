@@ -258,7 +258,7 @@ stateDiagram-v2
 |---|---|---|
 | `RETRYING` | Initial, and after any failed attempt below the cap. | No |
 | `DELIVERED` | An attempt returned success. | Yes |
-| `FAILED` | Attempts reached `MAX_ATTEMPTS` (5, mirroring the SQS `maxReceiveCount`). | Yes |
+| `FAILED` | Attempts reached `MAX_ATTEMPTS` (5, mirroring the Service Bus max delivery count). | Yes |
 
 Note: this `DeliveryStatus` (webhook delivery) is a different enum from the ordering
 `DeliveryStatus` (goods delivered to the end customer) — same name, unrelated meaning.
