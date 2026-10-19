@@ -54,3 +54,7 @@ errored.tfstate
 smoke_results.txt
 smoke2.txt
 ui_smoke.txt
+
+# AWS Odoo POC: state and plans hold plaintext secrets
+infra/aws-odoo-poc/terraform.tfstate*
+infra/aws-odoo-poc/tfplan
