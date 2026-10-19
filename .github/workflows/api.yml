@@ -1,0 +1,53 @@
+# API pipeline: Python checks + the api image build. Runs on PRs to main that touch the
+# backend code, and on pushes to main.
+name: API
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "migrations/**"
+      - "alembic.ini"
+      - "pyproject.toml"
+      - "pytest.ini"
+      - ".dockerignore"
+      - "Dockerfile.api"
+      - ".github/workflows/api.yml"
+      - ".github/workflows/_python-checks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "migrations/**"
+      - "alembic.ini"
+      - "pyproject.toml"
+      - "pytest.ini"
+      - ".dockerignore"
+      - "Dockerfile.api"
+      - ".github/workflows/api.yml"
+      - ".github/workflows/_python-checks.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: api-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Python checks
+    uses: ./.github/workflows/_python-checks.yml
+
+  image:
+    name: Build api image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build only, no push. Deploys use scripts/deploy_azure.sh.
+      - name: docker build Dockerfile.api
+        run: docker build -f Dockerfile.api -t o2c/api:ci .
