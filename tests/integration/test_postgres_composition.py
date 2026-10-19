@@ -14,6 +14,7 @@ verification), not this composition-wiring check.
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -27,10 +28,12 @@ from src.modules.reference.tenancy.domain.models import (  # noqa: E402
     BindingStatus,
     TenantConnectionBinding,
 )
-from src.shared.config import Settings  # noqa: E402
 from src.shared.persistence.engine import get_session_factory  # noqa: E402
 from src.shared.persistence.event_store import PostgresEventStore  # noqa: E402
 from src.shared.types import BindingId, ConnectionId, TenantId  # noqa: E402
+
+if TYPE_CHECKING:
+    from src.shared.config import Settings
 
 try:
     _factory = get_session_factory()
@@ -45,29 +48,12 @@ def _id(prefix: str) -> str:
 
 
 def _postgres_settings() -> Settings:
+    from dataclasses import replace
+
     from src.shared.config import get_settings
 
-    base = get_settings()  # picks up DATABASE_URL etc. already set for this process
-    return Settings(
-        profile="postgres",
-        database_url=base.database_url,
-        aws_endpoint_url=base.aws_endpoint_url,
-        aws_region=base.aws_region,
-        domain_topic_arn=base.domain_topic_arn,
-        erp_adapter_mode="stub",
-        erp_odoo_timeout_seconds=base.erp_odoo_timeout_seconds,
-        erp_netsuite_timeout_seconds=base.erp_netsuite_timeout_seconds,
-        log_level=base.log_level,
-        reconcile_interval_seconds=base.reconcile_interval_seconds,
-        worker_roles=base.worker_roles,
-        cognito_user_pool_id=base.cognito_user_pool_id,
-        cognito_client_id=base.cognito_client_id,
-        cognito_resource_server_id=base.cognito_resource_server_id,
-        cors_allowed_origins=base.cors_allowed_origins,
-        mapping_bedrock_model_id=base.mapping_bedrock_model_id,
-        agent_service_url=base.agent_service_url,
-        erp_probe_allow_private_addresses=base.erp_probe_allow_private_addresses,
-    )
+    # Env-loaded settings (DATABASE_URL etc.) with only the profile overridden.
+    return replace(get_settings(), profile="postgres", erp_adapter_mode="stub")
 
 
 def test_postgres_profile_places_and_routes_an_order() -> None:

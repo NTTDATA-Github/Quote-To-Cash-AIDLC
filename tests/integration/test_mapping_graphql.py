@@ -9,10 +9,12 @@ which the import-linter layered contract forbids module code from doing.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from src.api.graphql.context import GraphQLContext
 from src.api.graphql.operator.schema import build_operator_schema
 from src.composition import build_container
-from src.shared.config import Settings
+from src.shared.config import Settings, get_settings
 
 _SCHEMA = build_operator_schema()
 
@@ -20,25 +22,13 @@ _CSV = "field,description\norder_id,The id\ncustomer,End customer\n"
 
 
 def _settings() -> Settings:
-    return Settings(
+    # Start from the env-loaded settings so new required fields never break this test.
+    return replace(
+        get_settings(),
         profile="memory",
-        database_url="",
-        aws_endpoint_url=None,
-        aws_region="us-east-1",
-        domain_topic_arn="arn:aws:sns:us-east-1:000000000000:t.fifo",
         erp_adapter_mode="stub",
-        erp_odoo_timeout_seconds=5.0,
-        erp_netsuite_timeout_seconds=5.0,
-        log_level="INFO",
-        reconcile_interval_seconds=900,
         worker_roles=frozenset(),
-        cognito_user_pool_id=None,
-        cognito_client_id=None,
-        cognito_resource_server_id="o2c",
-        cors_allowed_origins=[],
-        mapping_bedrock_model_id="stub-model",
-        agent_service_url="http://localhost:8002",
-        erp_probe_allow_private_addresses=False,
+        mapping_llm_provider=None,
     )
 
 

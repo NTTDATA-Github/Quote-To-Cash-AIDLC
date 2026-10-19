@@ -1,13 +1,13 @@
 name: Deploy (staging)
 
 # Build + push images, apply Terraform, run migrations, roll ECS, ship the UI. Triggers:
-#   - push to main  -> auto-deploy staging
 #   - manual run    -> workflow_dispatch (set rebuild_odoo=true to force a new Odoo image)
+#   - push to main  -> auto-deploy staging: DISABLED until the staging secrets exist
+#                      (AWS_DEPLOY_ROLE_ARN, DB_PASSWORD, ODOO_DB_PASSWORD). Re-enable by
+#                      restoring `push: branches: [main]` under `on:`.
 # The `staging` GitHub Environment can carry a protection rule (required reviewer) if you
 # want a manual approval gate before each deploy. Auth via GitHub OIDC (no stored keys).
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       rebuild_odoo:
