@@ -7,16 +7,5 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    proxy: {
-      // floci (local Cognito emulator) doesn't send CORS headers, so a direct browser
-      // fetch to it fails preflight with an opaque "Failed to fetch". Real AWS Cognito's
-      // public InitiateAuth endpoint does support CORS, so this proxy only exists for
-      // local dev against floci — set VITE_COGNITO_ENDPOINT_URL=/cognito-idp to use it.
-      "/cognito-idp": {
-        target: "http://127.0.0.1:4566",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/cognito-idp/, ""),
-      },
-    },
   },
 });

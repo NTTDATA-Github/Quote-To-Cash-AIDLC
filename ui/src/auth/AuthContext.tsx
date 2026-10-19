@@ -1,9 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import * as cognito from "./cognitoAuth";
 import * as keycloak from "./keycloakAuth";
 
-import type { AuthTokens } from "./cognitoAuth";
+import type { AuthTokens } from "./keycloakAuth";
 
 const STORAGE_KEY = "erp-portal.auth";
 // Refresh a bit before actual expiry so a request never races a just-expired token.
@@ -42,35 +41,17 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-// VITE_AUTH_PROVIDER picks the identity backend, same shape as the API's own
-// CLOUD_PROVIDER switch — default "cognito" so existing AWS builds need no new env var.
-const provider = import.meta.env.VITE_AUTH_PROVIDER || "cognito";
+const keycloakConfig: keycloak.KeycloakConfig = {
+  issuerUrl: import.meta.env.VITE_KEYCLOAK_ISSUER_URL,
+  clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID,
+};
 
-function authAdapter() {
-  if (provider === "keycloak") {
-    const config: keycloak.KeycloakConfig = {
-      issuerUrl: import.meta.env.VITE_KEYCLOAK_ISSUER_URL,
-      clientId: import.meta.env.VITE_KEYCLOAK_CLIENT_ID,
-    };
-    return {
-      signIn: (username: string, password: string) => keycloak.signIn(config, username, password),
-      refreshSession: (refreshToken: string) => keycloak.refreshSession(config, refreshToken),
-      decodeIdTokenClaims: keycloak.decodeIdTokenClaims,
-    };
-  }
-  const config: cognito.CognitoConfig = {
-    endpointUrl: import.meta.env.VITE_COGNITO_ENDPOINT_URL || undefined,
-    region: import.meta.env.VITE_COGNITO_REGION,
-    clientId: import.meta.env.VITE_COGNITO_CLIENT_ID,
-  };
-  return {
-    signIn: (username: string, password: string) => cognito.signIn(config, username, password),
-    refreshSession: (refreshToken: string) => cognito.refreshSession(config, refreshToken),
-    decodeIdTokenClaims: cognito.decodeIdTokenClaims,
-  };
-}
-
-const auth = authAdapter();
+const auth = {
+  signIn: (username: string, password: string) =>
+    keycloak.signIn(keycloakConfig, username, password),
+  refreshSession: (refreshToken: string) => keycloak.refreshSession(keycloakConfig, refreshToken),
+  decodeIdTokenClaims: keycloak.decodeIdTokenClaims,
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState<AuthTokens | null>(() => loadStoredTokens());
