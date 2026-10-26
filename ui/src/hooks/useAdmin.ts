@@ -14,14 +14,23 @@ import {
   OPERATOR_ORDERS_QUERY,
   OPERATOR_ORDER_QUERY,
   PAUSE_CONNECTION_MUTATION,
+  CANCEL_ORDER_MUTATION,
+  PAUSE_WEBHOOK_ENDPOINT_MUTATION,
+  RESUME_WEBHOOK_ENDPOINT_MUTATION,
+  WEBHOOK_ENDPOINTS_QUERY,
+  type WebhookEndpoint,
+  ERP_TYPES_QUERY,
   REGISTER_CONNECTION_MUTATION,
+  REGISTER_RESELLER_WEBHOOK_MUTATION,
   REMOVE_BINDING_MUTATION,
   RESUME_CONNECTION_MUTATION,
   SET_ERP_ROUTE_MUTATION,
   TEST_ERP_ENDPOINT_MUTATION,
+  UPDATE_CONNECTION_MUTATION,
   VERIFY_BINDING_MUTATION,
   type Binding,
   type Connection,
+  type ErpType,
   type Subsidiary,
   type Reseller,
   type NotificationDelivery,
@@ -94,6 +103,58 @@ export function useOperatorOrder(orderId: string) {
   });
 }
 
+export function useWebhookEndpoints(tenantId: string | null) {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["webhookEndpoints", tenantId],
+    queryFn: () =>
+      graphqlRequest<{ webhookEndpoints: WebhookEndpoint[] }, { tenantId: string }>(
+        "operator",
+        WEBHOOK_ENDPOINTS_QUERY,
+        { tenantId: tenantId ?? "" },
+        idToken,
+      ).then((d) => d.webhookEndpoints),
+    enabled: isAuthenticated && !!tenantId,
+  });
+}
+
+function useSetWebhookEndpointActive(mutation: string) {
+  const { idToken } = useAuth();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: { tenantId: string; endpointId: string }) => graphqlRequest("operator", mutation, input, idToken),
+    onSuccess: (_data, input) => {
+      queryClient.invalidateQueries({ queryKey: ["webhookEndpoints", input.tenantId] });
+      notify(mutation === PAUSE_WEBHOOK_ENDPOINT_MUTATION ? "Webhook paused." : "Webhook resumed.");
+    },
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
+export function usePauseWebhookEndpoint() {
+  return useSetWebhookEndpointActive(PAUSE_WEBHOOK_ENDPOINT_MUTATION);
+}
+
+export function useResumeWebhookEndpoint() {
+  return useSetWebhookEndpointActive(RESUME_WEBHOOK_ENDPOINT_MUTATION);
+}
+
+export function useCancelOrder() {
+  const { idToken } = useAuth();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: { orderId: string; reason: string }) => graphqlRequest("operator", CANCEL_ORDER_MUTATION, input, idToken),
+    onSuccess: (_data, input) => {
+      queryClient.invalidateQueries({ queryKey: ["operatorOrder", input.orderId] });
+      queryClient.invalidateQueries({ queryKey: ["operatorOrders"] });
+      notify("Order cancelled.");
+    },
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
 export function useOperatorOrders() {
   const { idToken, isAuthenticated } = useAuth();
   return useQuery({
@@ -131,6 +192,66 @@ export function useRegisterConnection() {
       queryClient.invalidateQueries({ queryKey: ["connections"] });
       queryClient.invalidateQueries({ queryKey: ["mappableConnections"] });
       notify("Connection registered.");
+    },
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
+export function useErpTypes() {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["erpTypes"],
+    queryFn: () => graphqlRequest<{ erpTypes: ErpType[] }>("operator", ERP_TYPES_QUERY, {}, idToken).then((d) => d.erpTypes),
+    enabled: isAuthenticated,
+    staleTime: Infinity, // the catalog only changes with a deploy
+  });
+}
+
+export function useUpdateConnection() {
+  const { idToken } = useAuth();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: {
+      connectionId: string;
+      instanceLabel: string;
+      baseUrl: string;
+      credentials: Record<string, string>;
+      secret: string | null;
+    }) => graphqlRequest("operator", UPDATE_CONNECTION_MUTATION, input, idToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["connections"] });
+      notify("Connection saved.");
+    },
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
+export function useRegisterResellerWebhook() {
+  const { idToken } = useAuth();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: {
+      tenantId: string;
+      name: string;
+      url: string;
+      authType: string;
+      authParams: Record<string, string>;
+      authSecret: string | null;
+    }) =>
+      graphqlRequest<
+        {
+          registerResellerWebhook: {
+            endpoint: { endpointId: string; name: string; url: string; isActive: boolean; authType: string };
+            signingSecret: string;
+          };
+        },
+        typeof input
+      >("operator", REGISTER_RESELLER_WEBHOOK_MUTATION, input, idToken).then((d) => d.registerResellerWebhook),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["resellers"] });
+      notify("Webhook added.");
     },
     onError: (err) => notify((err as Error).message, "danger"),
   });

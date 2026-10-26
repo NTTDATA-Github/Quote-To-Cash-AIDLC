@@ -19,7 +19,7 @@ export class UnauthenticatedError extends Error {
   }
 }
 
-export type Audience = "reseller" | "operator";
+export type Audience = "operator";
 
 export async function graphqlRequest<TData, TVariables extends Record<string, unknown> = Record<string, never>>(
   audience: Audience,

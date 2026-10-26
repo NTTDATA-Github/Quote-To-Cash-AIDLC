@@ -3,6 +3,13 @@ from __future__ import annotations
 import pytest
 
 from src.modules.reference.connections.application.service import ConnectionService
+from src.modules.reference.connections.domain.erp_catalog import (
+    TARGET_BASE_URL,
+    TARGET_CREDENTIAL,
+    TARGET_LABEL,
+    TARGET_SECRET,
+    find_erp,
+)
 from src.modules.reference.connections.domain.errors import ConnectionNotFound
 from src.modules.reference.connections.domain.events import (
     CONNECTION_PAUSED,
@@ -10,7 +17,7 @@ from src.modules.reference.connections.domain.events import (
     CONNECTION_RENAMED,
     CONNECTION_RESUMED,
 )
-from src.modules.reference.connections.domain.models import ConnectionStatus
+from src.modules.reference.connections.domain.models import ConnectionStatus, ErpConnection
 from src.modules.reference.connections.infrastructure.memory import InMemoryConnectionRepository
 from src.shared.erp_probe import StubErpProbe
 from src.shared.messaging.facts import CollectingFactPublisher
@@ -180,3 +187,82 @@ def test_register_rejects_an_unknown_auth_type() -> None:
             secret="tok",
             auth_type="BEARER_TOKEM",
         )
+
+
+def _registered(svc: ConnectionService, secret: str | None = "raw-secret-eu1") -> ErpConnection:
+    return svc.register(
+        erp_type="ODOO",
+        instance_label="Odoo EU-1",
+        base_url="http://odoo:8069",
+        credentials={"database": "odoo", "username": "admin"},
+        secret=secret,
+    )
+
+
+def test_update_changes_editable_fields_and_keeps_the_stored_secret_when_blank() -> None:
+    svc = _service()
+    conn = _registered(svc)
+    updated = svc.update(
+        conn.connection_id,
+        instance_label="Odoo EU-2",
+        base_url="http://odoo2:8069",
+        credentials={"database": "odoo2", "username": "ops"},
+        secret=None,
+    )
+    assert updated.instance_label == "Odoo EU-2"
+    assert updated.base_url == "http://odoo2:8069"
+    assert updated.credentials == {"database": "odoo2", "username": "ops"}
+    assert updated.erp_type == "ODOO"  # fixed: changing it would change the adapter
+    assert svc._secrets.get_secret(conn.secret_ref) == "raw-secret-eu1"  # type: ignore[attr-defined]
+
+
+def test_update_with_a_new_secret_replaces_the_stored_one() -> None:
+    svc = _service()
+    conn = _registered(svc)
+    svc.update(
+        conn.connection_id,
+        instance_label="Odoo EU-1",
+        base_url="http://odoo:8069",
+        credentials={"database": "odoo", "username": "admin"},
+        secret="rotated",
+    )
+    assert svc._secrets.get_secret(conn.secret_ref) == "rotated"  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("base_url", ["odoo.example.com", "ftp://odoo", "http://"])
+def test_update_rejects_a_base_url_that_is_not_a_url(base_url: str) -> None:
+    svc = _service()
+    conn = _registered(svc)
+    with pytest.raises(ValueError, match="base_url"):
+        svc.update(
+            conn.connection_id,
+            instance_label="Odoo EU-1",
+            base_url=base_url,
+            credentials={},
+            secret=None,
+        )
+
+
+def test_update_raises_for_an_unknown_connection() -> None:
+    svc = _service()
+    with pytest.raises(ConnectionNotFound):
+        svc.update(
+            ConnectionId("conn_missing"),
+            instance_label="x",
+            base_url="http://x",
+            credentials={},
+            secret=None,
+        )
+
+
+def test_odoo_catalog_entry_asks_for_exactly_what_registration_needs() -> None:
+    spec = find_erp("ODOO")
+    assert spec is not None
+    by_target: dict[str, list[str]] = {}
+    for f in spec.fields:
+        by_target.setdefault(f.target, []).append(f.key)
+    assert by_target[TARGET_LABEL] == ["instance_label"]
+    assert by_target[TARGET_BASE_URL] == ["base_url"]
+    assert sorted(by_target[TARGET_CREDENTIAL]) == ["database", "username"]
+    assert by_target[TARGET_SECRET] == ["password"]
+    assert find_erp("NOT_AN_ERP") is None

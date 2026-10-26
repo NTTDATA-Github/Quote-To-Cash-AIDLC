@@ -110,9 +110,9 @@ def test_memory_profile_observes_order_and_reads_it() -> None:
     # is what caught `OrderLineType(pos, pos, pos)` breaking under strawberry (types need
     # kwargs), which the container-only checks above never touch.
     resp = client.post(
-        "/graphql/reseller",
+        "/graphql/operator",
         json={"query": _GET_ORDER, "variables": {"id": order_id}},
-        headers={"x-tenant-id": tenant},
+        headers={"x-tenant-id": tenant, "x-roles": "OPERATOR"},
     )
     assert resp.status_code == 200
     gql_body = resp.json()

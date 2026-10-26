@@ -462,7 +462,8 @@ def _build_memory_container(settings: Settings) -> Container:
         delivery_handler=delivery,
         order_projector=projector,
         reconcile_sweeper=None,
-        identity=HeaderStubIdentityProvider(),
+        # Keycloak when KEYCLOAK_ISSUER is set, otherwise the header stub (same as before).
+        identity=_resolve_identity_provider(settings),
         event_store=event_store,
         webhook_endpoints=webhook_endpoints,
         webhook_deliveries=webhook_deliveries,

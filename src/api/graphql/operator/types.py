@@ -87,6 +87,8 @@ class ConnectionType:
     instance_label: str
     base_url: str
     credentials: strawberry.scalars.JSON  # generic non-secret params — never the secret itself
+    # AuthType name (NONE, BASIC, ...). Lets the edit form ask for the right secret.
+    auth_type: str
     status: str
     secret_ref: str
     has_webhook_secret: bool
@@ -98,6 +100,41 @@ class ConnectionType:
     # AWAITING_ADAPTER (already approved, waiting for the generated code to land), or
     # ADAPTER_READY (same fact as `hasAdapter`, spelled out for display).
     mapping_status: str
+
+
+@strawberry.type
+class WebhookEndpointType:
+    endpoint_id: str
+    name: str
+    url: str
+    event_types: list[str] | None  # null = subscribed to every dispatchable event
+    is_active: bool
+    auth_type: str  # how we authenticate to this URL: NONE, API_KEY_HEADER, BEARER_TOKEN, BASIC
+
+
+@strawberry.type
+class WebhookEndpointCreatedType:
+    """`signing_secret` is returned once, on creation only. See WebhookEndpointService."""
+
+    endpoint: WebhookEndpointType
+    signing_secret: str
+
+
+@strawberry.type
+class ErpFieldType:
+    key: str
+    label: str
+    hint: str
+    target: str
+    secret: bool
+
+
+@strawberry.type
+class ErpTypeType:
+    code: str
+    name: str
+    auth_type: str
+    fields: list[ErpFieldType]
 
 
 @strawberry.type

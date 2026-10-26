@@ -26,7 +26,7 @@ if [[ -x .venv/Scripts/python.exe ]]; then
 elif [[ -x .venv/bin/python ]]; then
   PY=".venv/bin/python"
 else
-  echo "No virtualenv. Create one with: python -m venv .venv && .venv/Scripts/python -m pip install -e \".[dev]\""
+  echo "No virtualenv. Create one with: python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.lock && .venv/Scripts/python -m pip install --no-deps -e .\""
   exit 1
 fi
 # Absolute so the agent can cd into its own directory and still find this interpreter.
@@ -106,7 +106,7 @@ up() {
     (cd erp-agent-service && start_bg agent-api "$PY_ABS" -m uvicorn service.app:app --host 127.0.0.1 --port 8002)
     (cd erp-agent-service && start_bg agent-worker "$PY_ABS" -m service.worker)
   elif [[ -f erp-agent-service/.env ]]; then
-    echo "Agent dependencies are not installed. pip install -r erp-agent-service/requirements.txt"
+    echo "Agent dependencies are not installed. pip install -r erp-agent-service/requirements.lock"
   else
     echo "erp-agent-service/.env is missing. Copy erp-agent-service/.env.example to start the coding agent."
   fi

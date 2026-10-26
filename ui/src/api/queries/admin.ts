@@ -4,6 +4,7 @@ export interface Connection {
   instanceLabel: string;
   baseUrl: string;
   credentials: Record<string, string>;
+  authType: string;
   status: string;
   secretRef: string;
   hasWebhookSecret: boolean;
@@ -75,9 +76,33 @@ export interface OperatorOrder {
   parties: { endCustomerName: string; shipTo: string; subsidiaryId: string; quoteId: string };
 }
 
+// One field the add/edit connection form asks for. `target` says where the value goes:
+// LABEL, BASE_URL, CREDENTIAL (a non-secret parameter) or SECRET (stored, never returned).
+export interface ErpField {
+  key: string;
+  label: string;
+  hint: string;
+  target: "LABEL" | "BASE_URL" | "CREDENTIAL" | "SECRET";
+  secret: boolean;
+}
+
+// An ERP type the operator can connect without a developer. The form is built from this.
+export interface ErpType {
+  code: string;
+  name: string;
+  authType: string;
+  fields: ErpField[];
+}
+
+export const ERP_TYPES_QUERY = /* GraphQL */ `
+  query ErpTypes {
+    erpTypes { code name authType fields { key label hint target secret } }
+  }
+`;
+
 export const CONNECTIONS_QUERY = /* GraphQL */ `
   query Connections {
-    connections { connectionId erpType instanceLabel baseUrl credentials status secretRef hasWebhookSecret hasAdapter mappingStatus }
+    connections { connectionId erpType instanceLabel baseUrl credentials authType status secretRef hasWebhookSecret hasAdapter mappingStatus }
   }
 `;
 
@@ -154,6 +179,82 @@ export const REGISTER_CONNECTION_MUTATION = /* GraphQL */ `
       hasAdapter
       mappingStatus
     }
+  }
+`;
+
+export const UPDATE_CONNECTION_MUTATION = /* GraphQL */ `
+  mutation UpdateConnection(
+    $connectionId: String!
+    $instanceLabel: String!
+    $baseUrl: String!
+    $credentials: JSON!
+    $secret: String
+  ) {
+    updateConnection(
+      connectionId: $connectionId
+      instanceLabel: $instanceLabel
+      baseUrl: $baseUrl
+      credentials: $credentials
+      secret: $secret
+    ) { connectionId instanceLabel baseUrl status }
+  }
+`;
+
+// Adds a webhook URL for a reseller. `signingSecret` comes back once, so the operator
+// must copy it to the reseller straight away.
+export const REGISTER_RESELLER_WEBHOOK_MUTATION = /* GraphQL */ `
+  mutation RegisterResellerWebhook(
+    $tenantId: String!
+    $name: String!
+    $url: String!
+    $authType: String!
+    $authParams: JSON
+    $authSecret: String
+  ) {
+    registerResellerWebhook(
+      tenantId: $tenantId
+      name: $name
+      url: $url
+      authType: $authType
+      authParams: $authParams
+      authSecret: $authSecret
+    ) {
+      endpoint { endpointId name url isActive authType }
+      signingSecret
+    }
+  }
+`;
+
+// The webhook URLs of one reseller, paused ones included, with the auth type (never the secret).
+export interface WebhookEndpoint {
+  endpointId: string;
+  name: string;
+  url: string;
+  isActive: boolean;
+  authType: string;
+}
+
+export const WEBHOOK_ENDPOINTS_QUERY = /* GraphQL */ `
+  query WebhookEndpoints($tenantId: String!) {
+    webhookEndpoints(tenantId: $tenantId) { endpointId name url isActive authType }
+  }
+`;
+
+export const PAUSE_WEBHOOK_ENDPOINT_MUTATION = /* GraphQL */ `
+  mutation PauseWebhookEndpoint($tenantId: String!, $endpointId: String!) {
+    pauseWebhookEndpoint(tenantId: $tenantId, endpointId: $endpointId) { endpointId isActive }
+  }
+`;
+
+export const RESUME_WEBHOOK_ENDPOINT_MUTATION = /* GraphQL */ `
+  mutation ResumeWebhookEndpoint($tenantId: String!, $endpointId: String!) {
+    resumeWebhookEndpoint(tenantId: $tenantId, endpointId: $endpointId) { endpointId isActive }
+  }
+`;
+
+export const CANCEL_ORDER_MUTATION = /* GraphQL */ `
+  mutation CancelOrder($orderId: String!, $reason: String!) {
+    cancelOrder(orderId: $orderId, reason: $reason)
   }
 `;
 

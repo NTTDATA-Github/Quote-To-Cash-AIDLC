@@ -229,3 +229,45 @@ def test_exhausted_retries_marks_failed_and_stops_raising() -> None:
     assert recorded is not None
     assert recorded.status is DeliveryStatus.FAILED
     assert recorded.attempts == MAX_ATTEMPTS
+
+
+def _dispatch_with_auth(auth_type, params: dict[str, str], auth_secret: str | None):  # type: ignore[no-untyped-def]
+    from src.shared.erp_auth import AuthType
+
+    endpoints = InMemoryWebhookEndpointRepository()
+    secrets = EnvSecretStore()
+    overrides: dict = {"auth_type": AuthType(auth_type), "auth_params": params}
+    if auth_secret is not None:
+        overrides["auth_secret_ref"] = "webhook-endpoint-auth/test"
+        secrets.put_secret("webhook-endpoint-auth/test", auth_secret)
+    _register_endpoint(endpoints, secrets, **overrides)
+    sender = _FakeSender(success=True)
+    service = WebhookDispatchService(
+        endpoints=endpoints,
+        deliveries=InMemoryWebhookDeliveryRepository(),
+        secrets=secrets,
+        sender=sender,
+        orders=_FakeOrders(),
+    )
+    service.handle(_event())
+    assert len(sender.calls) == 1
+    return sender.calls[0][1]
+
+
+def test_api_key_auth_sends_the_header_next_to_the_signature() -> None:
+    headers = _dispatch_with_auth(
+        "API_KEY_HEADER", {"header_name": "X-Partner-Key"}, "partner-key-123"
+    )
+    assert headers["X-Partner-Key"] == "partner-key-123"
+    assert headers["X-Signature"].startswith("t=")
+
+
+def test_bearer_auth_sends_an_authorization_header() -> None:
+    headers = _dispatch_with_auth("BEARER_TOKEN", {}, "tok-abc")
+    assert headers["Authorization"] == "Bearer tok-abc"
+
+
+def test_no_auth_sends_no_credential_header() -> None:
+    headers = _dispatch_with_auth("NONE", {}, None)
+    assert "Authorization" not in headers
+    assert headers["X-Signature"].startswith("t=")

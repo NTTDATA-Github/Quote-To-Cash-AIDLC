@@ -24,8 +24,18 @@ jobs:
         with:
           python-version: "3.11"
 
+      # Fails if pyproject.toml changed without regenerating the locks (scripts/lock.sh).
+      - name: Locks are up to date
+        run: |
+          python -m pip install uv==0.12.17
+          bash scripts/lock.sh --check
+
+      # Install exactly what the lock pins (hash-checked), then the project without
+      # re-resolving. Same set the Docker images install.
       - name: Install project + dev tools
-        run: python -m pip install -e ".[dev]"
+        run: |
+          python -m pip install -r requirements-dev.lock
+          python -m pip install --no-deps -e .
 
       # ruff is scoped to the Python files this change touches, exactly like the
       # pre-commit hook (boy-scout rule). The repo carries pre-existing, repo-wide ruff
