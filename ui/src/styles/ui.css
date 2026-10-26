@@ -143,6 +143,20 @@ textarea.input { height: auto; padding: var(--space-2) var(--space-3); }
 .erp-table tr.is-selected td { background: var(--brand-soft); }
 .erp-table td a { color: var(--brand); text-decoration: none; font-weight: 600; }
 .erp-table td a:hover { text-decoration: underline; }
+/* Rows: a light hover, and a selected row with a brand edge so it reads at a glance. */
+.erp-table tbody tr td { transition: background var(--transition); }
+.erp-table tbody tr:hover td { background: color-mix(in srgb, var(--line) 35%, transparent); }
+.erp-table tbody tr.is-selected:hover td { background: var(--brand-soft); }
+.erp-table tbody tr.is-selected td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+.erp-table tbody tr.is-selected td { font-weight: 500; }
+/* Editable cells: value and Edit button on one line; input with Save and Cancel while editing. */
+.cell-view, .cell-edit { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.cell-view__text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cell-view .erp-btn, .cell-view .erp-btn--sm { opacity: 0.55; transition: opacity var(--transition); }
+.erp-table tr:hover .cell-view .erp-btn, .cell-view:focus-within .erp-btn, .cell-view .erp-btn:focus-visible { opacity: 1; }
+.cell-edit .input { flex: 1; min-width: 120px; }
+/* Icon-prefixed text buttons: keep the icon centred on the label. */
+.erp-btn > svg { vertical-align: -3px; margin-right: 6px; flex: none; }
 
 /* ---- Mapping flow (features/admin/MappingsPage.tsx) ---- */
 /* Each ERP field -> our field pairing reads as a sentence, not a table row — meant to
@@ -476,6 +490,11 @@ body { background: var(--surface); }
 }
 .icon-btn:hover { background: var(--surface-sunken); color: var(--ink); }
 .icon-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* Compact, borderless variant for table rows. */
+.icon-btn--sm { width: 28px; height: 28px; border-color: transparent; background: transparent; }
+.icon-btn--sm:hover { background: var(--surface-sunken); }
+.icon-btn--danger:hover { background: var(--status-danger-bg); color: var(--status-danger-fg); }
 .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .icon-btn:disabled:hover { background: var(--surface-raised); color: var(--ink-muted); }
 .icon-btn.is-active { background: var(--brand-soft); border-color: transparent; color: var(--brand); }

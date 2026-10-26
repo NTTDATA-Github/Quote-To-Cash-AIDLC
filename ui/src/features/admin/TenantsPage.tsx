@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { Search } from "lucide-react";
+import { Copy, Pause, Play, Plus, Search, ShieldCheck, Trash2, Webhook } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
+import { IconButton } from "../../components/IconButton";
 import { FilterMenu } from "../../components/FilterMenu";
 import { InfoTag } from "../../components/InfoTag";
 import { PageHeader } from "../../components/PageHeader";
@@ -93,22 +94,10 @@ export function TenantsPage() {
         b.status === "REMOVED" ? null : (
           <span className="actions">
             {b.status !== "VERIFIED" && (
-              <button className="erp-btn erp-btn--secondary erp-btn--sm" type="button" onClick={() => verifyBinding.mutate({ bindingId: b.bindingId })}>
-                Verify
-              </button>
+              <IconButton icon={ShieldCheck} label="Verify reseller link" onClick={() => verifyBinding.mutate({ bindingId: b.bindingId })} />
             )}
-            <button
-              className="erp-btn erp-btn--ghost erp-btn--sm"
-              type="button"
-              onClick={() =>
-                setDrawer({ kind: "webhooks", tenantId: b.tenantId, resellerName: resellerNameById.get(b.tenantId) ?? b.tenantId })
-              }
-            >
-              Webhooks
-            </button>
-            <button className="erp-btn erp-btn--ghost erp-btn--sm" type="button" onClick={() => removeBinding.mutate({ bindingId: b.bindingId })}>
-              Remove
-            </button>
+            <IconButton icon={Webhook} label="Webhook addresses" onClick={() => setDrawer({ kind: "webhooks", tenantId: b.tenantId, resellerName: resellerNameById.get(b.tenantId) ?? b.tenantId })} />
+            <IconButton icon={Trash2} label="Remove reseller link" tone="danger" onClick={() => removeBinding.mutate({ bindingId: b.bindingId })} />
           </span>
         ),
     },
@@ -176,21 +165,9 @@ export function TenantsPage() {
       header: "",
       render: (e) =>
         e.isActive ? (
-          <button
-            className="erp-btn erp-btn--ghost erp-btn--sm"
-            type="button"
-            onClick={() => pauseWebhook.mutate({ tenantId: drawerTenantId, endpointId: e.endpointId })}
-          >
-            Pause
-          </button>
+          <IconButton icon={Pause} label="Pause webhook" onClick={() => pauseWebhook.mutate({ tenantId: drawerTenantId, endpointId: e.endpointId })} />
         ) : (
-          <button
-            className="erp-btn erp-btn--ghost erp-btn--sm"
-            type="button"
-            onClick={() => resumeWebhook.mutate({ tenantId: drawerTenantId, endpointId: e.endpointId })}
-          >
-            Resume
-          </button>
+          <IconButton icon={Play} label="Resume webhook" onClick={() => resumeWebhook.mutate({ tenantId: drawerTenantId, endpointId: e.endpointId })} />
         ),
     },
   ];
@@ -221,7 +198,7 @@ export function TenantsPage() {
           style={{ marginLeft: "auto" }}
           onClick={() => setDrawer({ kind: "register" })}
         >
-          Register reseller
+          <Plus size={14} aria-hidden="true" /> Register reseller
         </button>
       </div>
       {error && <div className="callout callout--danger">Could not load resellers: {error.message}</div>}
@@ -282,7 +259,7 @@ export function TenantsPage() {
                 type="button"
                 onClick={() => setDrawer({ kind: "webhook", tenantId: drawer.tenantId, resellerName: drawer.resellerName })}
               >
-                Add webhook
+                <Plus size={14} aria-hidden="true" /> Add webhook
               </button>
             </div>
             <DataTable
@@ -371,7 +348,7 @@ export function TenantsPage() {
             <pre className="mono" style={{ whiteSpace: "pre-wrap", wordBreak: "break-all" }}>{drawer.signingSecret}</pre>
             <div className="actions">
               <button className="erp-btn erp-btn--ghost" type="button" onClick={() => void navigator.clipboard?.writeText(drawer.signingSecret)}>
-                Copy secret
+                <Copy size={14} aria-hidden="true" /> Copy secret
               </button>
               <button className="erp-btn erp-btn--primary" type="button" onClick={closeDrawer}>
                 Done

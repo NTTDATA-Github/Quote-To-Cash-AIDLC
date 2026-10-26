@@ -121,6 +121,7 @@ class PostgresBindingRepository:
                 select(tenant_connection_bindings_table).where(
                     tenant_connection_bindings_table.c.tenant_id == str(tenant_id),
                     tenant_connection_bindings_table.c.connection_id == str(connection_id),
+                    tenant_connection_bindings_table.c.status != BindingStatus.REMOVED.value,
                 )
             ).first()
         finally:
@@ -136,6 +137,7 @@ class PostgresBindingRepository:
                 select(tenant_connection_bindings_table).where(
                     tenant_connection_bindings_table.c.connection_id == str(connection_id),
                     tenant_connection_bindings_table.c.erp_customer_id == erp_customer_id,
+                    tenant_connection_bindings_table.c.status != BindingStatus.REMOVED.value,
                 )
             ).first()
         finally:

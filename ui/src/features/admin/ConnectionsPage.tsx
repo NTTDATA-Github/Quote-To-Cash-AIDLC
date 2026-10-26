@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Check, Plug, Search, X } from "lucide-react";
+import { Check, Pause, Pencil, Play, Plug, Plus, Search, X, Zap } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
+import { IconButton } from "../../components/IconButton";
 import { Drawer } from "../../components/Drawer";
 import { InfoTag } from "../../components/InfoTag";
 import { PageHeader } from "../../components/PageHeader";
@@ -324,50 +325,13 @@ export function ConnectionsPage() {
         return (
           <div className="cell-stack">
             <div className="actions">
-                <button
-                  className="erp-btn erp-btn--ghost erp-btn--sm"
-                  type="button"
-                  disabled={testingId === c.connectionId}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void runTest(c.connectionId);
-                  }}
-                >
-                  {testingId === c.connectionId ? "Testing…" : "Test"}
-                </button>
-                <button
-                  className="erp-btn erp-btn--ghost erp-btn--sm"
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMode({ kind: "edit", erp: editSpecFor(c), connection: c });
-                  }}
-                >
-                  Edit
-                </button>
+                <IconButton icon={Zap} label="Test connection" disabled={testingId === c.connectionId} onClick={() => void runTest(c.connectionId)} />
+                <IconButton icon={Pencil} label="Edit connection" onClick={() => setMode({ kind: "edit", erp: editSpecFor(c), connection: c })} />
               {
                 (c.status === "ACTIVE" ? (
-                  <button
-                    className="erp-btn erp-btn--ghost erp-btn--sm"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      pauseConnection.mutate({ connectionId: c.connectionId });
-                    }}
-                  >
-                    Pause
-                  </button>
+                  <IconButton icon={Pause} label="Pause connection" onClick={() => pauseConnection.mutate({ connectionId: c.connectionId })} />
                 ) : (
-                  <button
-                    className="erp-btn erp-btn--ghost erp-btn--sm"
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      resumeConnection.mutate({ connectionId: c.connectionId });
-                    }}
-                  >
-                    Resume
-                  </button>
+                  <IconButton icon={Play} label="Resume connection" onClick={() => resumeConnection.mutate({ connectionId: c.connectionId })} />
                 ))}
             </div>
             {result && (
@@ -461,7 +425,7 @@ export function ConnectionsPage() {
             style={{ marginLeft: "auto" }}
             onClick={() => setMode({ kind: "choose" })}
           >
-            Add connection
+            <Plus size={14} aria-hidden="true" /> Add connection
           </button>
         </div>
         {error && <div className="callout callout--danger">Could not load connections: {error.message}</div>}

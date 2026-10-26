@@ -28,6 +28,7 @@ class BindingService:
     def create_binding(
         self, *, tenant_id: TenantId, connection_id: ConnectionId, erp_customer_id: str
     ) -> TenantConnectionBinding:
+        # Only active links count: a removed link is history, so a new link is a new row.
         if self._repository.find_by_tenant_and_connection(tenant_id, connection_id) is not None:
             raise BindingConflict(
                 f"tenant '{tenant_id}' already has a binding to connection '{connection_id}'"
@@ -61,13 +62,11 @@ class BindingService:
         return binding
 
     def remove_binding(self, binding_id: BindingId) -> TenantConnectionBinding:
-        """Status change, not a delete (`tenant_connection_bindings` keeps the row so
-        historical orders still resolve their routing). `is_bound`/ownership checks
-        already treat any non-VERIFIED status as unbound, so this takes effect
-        immediately. Note: the `(tenant_id, connection_id)` UNIQUE constraint means a new
-        binding for the same pair can't be created while this REMOVED row still exists —
-        re-onboarding that pair isn't supported without a schema change, which is out of
-        scope for a status-only removal."""
+        """Status change, not a delete: the row stays so historical orders still resolve their
+        routing. `is_bound` and customer lookups already treat any non-VERIFIED status as
+        unbound, so this takes effect immediately. The unique rules apply only to active rows
+        (migration 0019), so the same reseller can link the same connection again later, as a
+        new row."""
         binding = self._repository.get(binding_id)
         if binding is None:
             raise BindingNotFound(str(binding_id))

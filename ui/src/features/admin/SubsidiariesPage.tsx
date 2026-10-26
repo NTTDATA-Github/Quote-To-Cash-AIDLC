@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
 import { Drawer } from "../../components/Drawer";
@@ -203,7 +203,7 @@ export function SubsidiariesPage() {
           />
         </div>
         <button className="erp-btn erp-btn--primary" type="button" style={{ marginLeft: "auto" }} onClick={() => setShowForm(true)}>
-          Add subsidiary
+          <Plus size={14} aria-hidden="true" /> Add subsidiary
         </button>
       </div>
       {error && <div className="callout callout--danger">Could not load subsidiaries: {error.message}</div>}
