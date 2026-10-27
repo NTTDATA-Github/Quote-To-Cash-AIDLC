@@ -57,6 +57,16 @@ namespace_packages = true
 mypy_path = "src"
 exclude = ["migrations/"]
 
+# --- Pyrefly (IDE type checker): resolve imports the same way the runtime does ---
+# `search-path = ["."]` roots resolution at the workspace, so `src` is the top-level
+# package and modules resolve as `src.api.…` — matching the `from src.…` imports and
+# import-linter's `root_package = "src"`. Without this, Pyrefly auto-roots at `src`,
+# indexes packages as `api.…`, and fails to load open buffers ("memory path not found").
+[tool.pyrefly]
+project-includes = ["src", "tests", "migrations", "scripts"]
+search-path = ["."]
+python-version = "3.11"
+
 # --- lint + format ---
 [tool.ruff]
 line-length = 100

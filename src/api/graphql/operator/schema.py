@@ -8,10 +8,19 @@ schema holds no new business logic.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import strawberry
 from strawberry.extensions import QueryDepthLimiter
+
+if TYPE_CHECKING:
+    # `strawberry.scalars.JSON` is a `NewType` instance, not a type form, so type
+    # checkers reject it in annotation position ("expected a type form, got instance
+    # of NewType"). Alias it to `Any` for the checker; at runtime it stays the real
+    # Strawberry scalar below, so the generated schema keeps its `JSON` scalar.
+    JSON = Any
+else:
+    JSON = strawberry.scalars.JSON
 
 from src.modules.integration.conflicts.application.causes import cause_of
 from src.modules.integration.conflicts.domain.categories import LABELS, ConflictCategory
@@ -543,7 +552,7 @@ class Mutation:
         erp_type: str,
         instance_label: str,
         base_url: str,
-        credentials: strawberry.scalars.JSON,
+        credentials: JSON,
         auth: AuthConfigInput,
         webhook_secret_ref: str | None = None,
     ) -> ConnectionType:
@@ -617,7 +626,7 @@ class Mutation:
         name: str,
         url: str,
         auth_type: str = "NONE",
-        auth_params: strawberry.scalars.JSON | None = None,
+        auth_params: JSON | None = None,
         auth_secret: str | None = None,
     ) -> WebhookEndpointCreatedType:
         """Adds a webhook URL for a reseller, on the reseller's behalf. The signing secret
@@ -706,7 +715,7 @@ class Mutation:
         connection_id: str,
         instance_label: str,
         base_url: str,
-        credentials: strawberry.scalars.JSON,
+        credentials: JSON,
         secret: str | None = None,
     ) -> ConnectionType:
         """Edits a saved connection. A blank or missing `secret` keeps the stored one."""
