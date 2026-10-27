@@ -15,6 +15,13 @@ import {
   OPERATOR_ORDER_QUERY,
   PAUSE_CONNECTION_MUTATION,
   CANCEL_ORDER_MUTATION,
+  CONFLICT_EXPLANATION_QUERY,
+  SEVERITY_RULES_QUERY,
+  SET_SEVERITY_RULE_MUTATION,
+  type SeverityRule,
+  ORDER_CONFLICTS_QUERY,
+  type ConflictExplanation,
+  type OrderConflict,
   PAUSE_WEBHOOK_ENDPOINT_MUTATION,
   RESUME_WEBHOOK_ENDPOINT_MUTATION,
   WEBHOOK_ENDPOINTS_QUERY,
@@ -99,6 +106,68 @@ export function useOperatorOrder(orderId: string) {
         (d) => d.order,
       ),
     enabled: isAuthenticated && !!orderId,
+    refetchInterval: LIVE_REFETCH_MS,
+  });
+}
+
+export function useSeverityRules() {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["severityRules"],
+    queryFn: () =>
+      graphqlRequest<{ conflictSeverityRules: SeverityRule[] }>("operator", SEVERITY_RULES_QUERY, {}, idToken).then(
+        (d) => d.conflictSeverityRules,
+      ),
+    enabled: isAuthenticated,
+  });
+}
+
+export function useSetSeverityRule() {
+  const { idToken } = useAuth();
+  const queryClient = useQueryClient();
+  const { notify } = useToast();
+  return useMutation({
+    mutationFn: (input: { category: string; whenRejected: string; whenRetrying: string }) =>
+      graphqlRequest("operator", SET_SEVERITY_RULE_MUTATION, input, idToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["severityRules"] });
+      notify("Severity rule saved. It applies to conflicts opened from now on.");
+    },
+    onError: (err) => notify((err as Error).message, "danger"),
+  });
+}
+
+/** The AI summary for one conflict. Only asked for while its drawer is open. */
+export function useConflictExplanation(conflictId: string | null) {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["conflictExplanation", conflictId],
+    queryFn: () =>
+      graphqlRequest<{ conflictExplanation: ConflictExplanation }, { conflictId: string }>(
+        "operator",
+        CONFLICT_EXPLANATION_QUERY,
+        { conflictId: conflictId ?? "" },
+        idToken,
+      ).then((d) => d.conflictExplanation),
+    enabled: isAuthenticated && !!conflictId,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+}
+
+/** Failed or rejected deliveries. Refetches on the same cadence as live orders. */
+export function useOrderConflicts(status: string | null) {
+  const { idToken, isAuthenticated } = useAuth();
+  return useQuery({
+    queryKey: ["orderConflicts", status],
+    queryFn: () =>
+      graphqlRequest<{ orderConflicts: OrderConflict[] }, { status: string | null }>(
+        "operator",
+        ORDER_CONFLICTS_QUERY,
+        { status },
+        idToken,
+      ).then((d) => d.orderConflicts),
+    enabled: isAuthenticated,
     refetchInterval: LIVE_REFETCH_MS,
   });
 }

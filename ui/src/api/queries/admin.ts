@@ -225,6 +225,78 @@ export const REGISTER_RESELLER_WEBHOOK_MUTATION = /* GraphQL */ `
   }
 `;
 
+// A delivery that failed or was rejected, waiting for an operator. View-only for now.
+// The kind of problem behind a conflict. Computed by the API from the ERP's message.
+export type ConflictCategory =
+  | "CUSTOMER_ON_HOLD"
+  | "PRODUCT_NOT_FOUND"
+  | "PRICE_MISMATCH"
+  | "ADDRESS_PROBLEM"
+  | "DUPLICATE_ORDER"
+  | "ERP_UNREACHABLE"
+  | "OTHER";
+
+export interface OrderConflict {
+  conflictId: string;
+  tenantId: string;
+  orderId: string;
+  reasonCode: string;
+  reason: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  status: "OPEN" | "IN_REVIEW" | "RESOLVED" | "DISMISSED";
+  attempts: number;
+  openedAt: string;
+  slaDueAt: string;
+  resolvedAt: string | null;
+  resolutionNote: string;
+  category: ConflictCategory;
+  categorySource: "RULE" | "AI" | "UNRECOGNISED";
+}
+
+// An AI summary of one conflict. `text` is set when one was written; otherwise `unavailable`
+// says why not.
+export interface ConflictExplanation {
+  text: string | null;
+  unavailable: string | null;
+}
+
+// How urgent one cause is, by whether the ERP refused the order or delivery is retrying.
+export interface SeverityRule {
+  category: ConflictCategory;
+  label: string;
+  whenRejected: "HIGH" | "MEDIUM" | "LOW";
+  whenRetrying: "HIGH" | "MEDIUM" | "LOW";
+}
+
+export const SEVERITY_RULES_QUERY = /* GraphQL */ `
+  query SeverityRules {
+    conflictSeverityRules { category label whenRejected whenRetrying }
+  }
+`;
+
+export const SET_SEVERITY_RULE_MUTATION = /* GraphQL */ `
+  mutation SetSeverityRule($category: String!, $whenRejected: String!, $whenRetrying: String!) {
+    setConflictSeverityRule(category: $category, whenRejected: $whenRejected, whenRetrying: $whenRetrying) {
+      category label whenRejected whenRetrying
+    }
+  }
+`;
+
+export const CONFLICT_EXPLANATION_QUERY = /* GraphQL */ `
+  query ConflictExplanation($conflictId: String!) {
+    conflictExplanation(conflictId: $conflictId) { text unavailable }
+  }
+`;
+
+export const ORDER_CONFLICTS_QUERY = /* GraphQL */ `
+  query OrderConflicts($status: String) {
+    orderConflicts(status: $status) {
+      conflictId tenantId orderId reasonCode reason severity status attempts
+      openedAt slaDueAt resolvedAt resolutionNote category categorySource
+    }
+  }
+`;
+
 // The webhook URLs of one reseller, paused ones included, with the auth type (never the secret).
 export interface WebhookEndpoint {
   endpointId: string;

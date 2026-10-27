@@ -103,6 +103,47 @@ class ConnectionType:
 
 
 @strawberry.type
+class OrderConflictType:
+    """A delivery that failed or was rejected, waiting for an operator. View-only for now."""
+
+    conflict_id: str
+    tenant_id: str
+    order_id: str
+    reason_code: str
+    reason: str
+    severity: str  # HIGH (the ERP rejected it) | MEDIUM (still being retried)
+    status: str  # OPEN | IN_REVIEW | RESOLVED | DISMISSED
+    attempts: int
+    opened_at: str
+    sla_due_at: str
+    resolved_at: str | None
+    resolution_note: str
+    category: str  # ConflictCategory, e.g. CUSTOMER_ON_HOLD
+    # Where the cause came from: RULE (a rule recognised it), AI (suggested by the model), or
+    # UNRECOGNISED (neither could say).
+    category_source: str
+
+
+@strawberry.type
+class SeverityRuleType:
+    """How urgent one cause is: when the ERP refused the order, and when delivery is retrying."""
+
+    category: str
+    label: str
+    when_rejected: str  # HIGH | MEDIUM | LOW
+    when_retrying: str
+
+
+@strawberry.type
+class ConflictExplanationType:
+    """A plain-English summary of one conflict. `text` is set when a summary was written;
+    otherwise `unavailable` says why there isn't one."""
+
+    text: str | None
+    unavailable: str | None
+
+
+@strawberry.type
 class WebhookEndpointType:
     endpoint_id: str
     name: str

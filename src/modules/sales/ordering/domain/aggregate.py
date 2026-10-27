@@ -171,7 +171,14 @@ class Order(Aggregate):
         )
 
     def reject(self, reason_code: str, reseller_message: str) -> None:
-        if self.state not in (OrderState.SUBMITTED, OrderState.VALIDATED):
+        # Refused before the ERP took it (SUBMITTED, VALIDATED), or refused by the ERP during
+        # delivery (ACCEPTED, or RETRYING after earlier transient failures).
+        if self.state not in (
+            OrderState.SUBMITTED,
+            OrderState.VALIDATED,
+            OrderState.ACCEPTED,
+            OrderState.RETRYING,
+        ):
             raise OrderInvalidTransition(f"cannot reject in state {self.state}")
         self.emit(
             OrderRejected(

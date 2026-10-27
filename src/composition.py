@@ -18,8 +18,26 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from src.modules.integration.conflicts.application.service import ConflictService
+from src.modules.integration.conflicts.infrastructure.llm_classifier import (
+    LlmCauseClassifier,
+    UnavailableCauseClassifier,
+)
+from src.modules.integration.conflicts.infrastructure.llm_explainer import (
+    LlmConflictExplainer,
+    UnavailableConflictExplainer,
+)
+from src.modules.integration.conflicts.infrastructure.memory import (
+    InMemoryConflictRepository,
+    InMemorySeverityRules,
+)
+from src.modules.integration.conflicts.infrastructure.postgres import (
+    PostgresConflictRepository,
+    PostgresSeverityRuleRepository,
+)
 from src.modules.integration.erp.application.delivery import DeliveryHandler
 from src.modules.integration.erp.application.ports import (
     ErpAdapter,
@@ -29,6 +47,7 @@ from src.modules.integration.erp.application.ports import (
     UnknownErpType,
 )
 from src.modules.integration.erp.application.reconcile import ReconcileSweeper
+from src.modules.integration.erp.infrastructure.demo_adapter import DemoRejectingAdapter
 from src.modules.integration.erp.infrastructure.registry import build_adapter_registry
 from src.modules.integration.erp.infrastructure.stub_adapter import StubErpAdapter
 from src.modules.integration.mapping.application.processing import process_pending_jobs
@@ -74,8 +93,10 @@ from src.modules.integration.webhooks_outbound.infrastructure.postgres import (
     PostgresWebhookDeliveryRepository,
     PostgresWebhookEndpointRepository,
 )
+from src.modules.reference.connections.application.service import ConnectionService
 from src.modules.reference.connections.infrastructure.memory import InMemoryConnectionRepository
 from src.modules.reference.connections.infrastructure.postgres import PostgresConnectionRepository
+from src.modules.reference.tenancy.application.service import BindingService
 from src.modules.reference.tenancy.infrastructure.memory import (
     InMemoryBindingRepository,
     InMemoryResellerRepository,
@@ -95,6 +116,7 @@ from src.modules.sales.ordering.application.fulfillment_consumer import OrderFul
 from src.modules.sales.ordering.application.order_service import OrderService
 from src.modules.sales.ordering.application.processing import OrderProcessor
 from src.modules.sales.ordering.domain.aggregate import Order
+from src.modules.sales.ordering.domain.models import OrderLine
 from src.modules.sales.ordering.projections.postgres_store import PostgresOrderProjectionStore
 from src.modules.sales.ordering.projections.projector import OrderProjector
 from src.modules.sales.ordering.projections.store import OrderProjectionStore
@@ -132,10 +154,15 @@ from src.shared.persistence.engine import get_session_factory
 from src.shared.persistence.event_store import PostgresEventStore
 from src.shared.secrets import EnvSecretStore, SecretStore
 from src.shared.secrets.azure import KeyVaultSecretStore
+from src.shared.types import OrderId, TenantId, generate_id
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from src.modules.integration.conflicts.application.ports import (
+        CauseClassifier,
+        ConflictExplainer,
+    )
     from src.modules.integration.mapping.application.ports import (
         LlmClient,
         MappingJobRepository,
@@ -155,13 +182,65 @@ if TYPE_CHECKING:
         SubsidiaryRepository,
         SubsidiaryRouteRepository,
     )
-    from src.shared.types import ConnectionId, TenantId
+    from src.shared.types import ConnectionId
 
 
 log = logging.getLogger(__name__)
 
 
 # --- bridge adapters: other modules' repos -> the ports ordering/integration expect ---
+def _demo_erp_adapter(settings: Settings) -> ErpAdapter:
+    """The memory profile's ERP. With DEMO_REJECT_ERP_CUSTOMERS set, the listed customers' orders
+    are rejected so conflicts appear in the demo. Otherwise it is the plain stub."""
+    stub = StubErpAdapter()
+    if settings.demo_reject_erp_customers:
+        return DemoRejectingAdapter(stub, settings.demo_reject_erp_customers)
+    return stub
+
+
+def _conflict_explainer(settings: Settings, secrets: SecretStore) -> ConflictExplainer:
+    """AI summaries use the configured LLM provider. With none configured, the drawer says the
+    summary is unavailable. The client is only built when a summary is first asked for."""
+    if not (settings.llm_provider or settings.mapping_llm_provider):
+        return UnavailableConflictExplainer()
+    return LlmConflictExplainer(lambda: _llm_client(settings, secrets))
+
+
+def _cause_classifier(settings: Settings, secrets: SecretStore) -> CauseClassifier:
+    """Same provider rule as the summaries: none configured means no suggestions, not an error."""
+    if not (settings.llm_provider or settings.mapping_llm_provider):
+        return UnavailableCauseClassifier()
+    return LlmCauseClassifier(lambda: _llm_client(settings, secrets))
+
+
+class OrderConflictRecorder:
+    """Turns delivery outcomes into operator conflicts. The delivery handler knows the order
+    id only, so the tenant is read from the order's projection here."""
+
+    def __init__(
+        self,
+        conflicts: ConflictService,
+        projections: OrderProjectionStore | PostgresOrderProjectionStore,
+    ) -> None:
+        self._conflicts = conflicts
+        self._projections = projections
+
+    def record(self, order_id: OrderId, *, reason_code: str, reason: str, terminal: bool) -> None:
+        view = self._projections.get_operator_view(order_id)
+        if view is None:
+            return
+        self._conflicts.record_failure(
+            tenant_id=view.tenant_id,
+            order_id=str(order_id),
+            reason_code=reason_code,
+            reason=reason,
+            terminal=terminal,
+        )
+
+    def cleared(self, order_id: OrderId) -> None:
+        self._conflicts.close_for_order(str(order_id))
+
+
 class TenancyBindingQuery:
     def __init__(self, bindings: BindingRepository) -> None:
         self._bindings = bindings
@@ -269,6 +348,11 @@ class Container:
     # a deterministic stub proposer) and is a no-op in postgres (the worker does it).
     mapping_service: MappingService
     mapping_jobs: MappingJobRepository
+    # Order conflicts: failed or rejected deliveries awaiting an operator (view-only for now).
+    conflicts: ConflictService
+    conflict_explainer: ConflictExplainer
+    # Suggests a cause for ERP messages the rules don't recognise (grouping only, never severity).
+    cause_classifier: CauseClassifier
     mapping_proposer: MappingProposer
     mapping_process_pending: Callable[[], int]
     # Suggests which record kinds/paths to pull live during onboarding (separate from
@@ -356,6 +440,62 @@ def build_container(settings: Settings | None = None) -> Container:
     return _build_memory_container(settings)
 
 
+# (tenant, name, ERP customer). The customer decides what the demo ERP says about its orders
+# (see DEMO_REJECTIONS in the demo adapter). ACME is the one the ERP accepts.
+_DEMO_RESELLERS: tuple[tuple[str, str, str], ...] = (
+    ("tnt_exn", "EXN", "1"),
+    ("tnt_acme", "ACME", "2"),
+    ("tnt_bolt", "Bolt Supplies", "3"),
+    ("tnt_cora", "Cora Foods", "4"),
+    ("tnt_delta", "Delta Tools", "5"),
+    ("tnt_ember", "Ember Parts", "6"),
+    ("tnt_flint", "Flint Traders", "7"),
+)
+
+
+def _seed_demo_conflicts(container: Container, repo: EventSourcedRepository[Order]) -> None:
+    """Demo data for the conflict queue, written through the same services the app uses. Two
+    resellers buy through one Odoo connection. EXN's ERP customer is on the reject list, so its
+    orders fail and open conflicts; ACME's are accepted. Runs only when DEMO_REJECT_ERP_CUSTOMERS
+    is set, and only in the memory profile."""
+    connection = ConnectionService(
+        container.connections, container.facts, container.secrets, container.erp_probe
+    ).register(
+        erp_type="ODOO",
+        instance_label="Demo Odoo",
+        base_url="http://demo-odoo.local:8069",
+        credentials={"database": "demo", "username": "admin"},
+        secret="demo-only",
+    )
+    bindings = BindingService(container.bindings, container.facts)
+    for tenant_id, name, erp_customer_id in _DEMO_RESELLERS:
+        container.resellers.upsert(TenantId(tenant_id), name)
+        binding = bindings.create_binding(
+            tenant_id=TenantId(tenant_id),
+            connection_id=connection.connection_id,
+            erp_customer_id=erp_customer_id,
+        )
+        bindings.verify_binding(binding.binding_id)
+    for index in range(4):
+        for tenant_id, _name, _customer in _DEMO_RESELLERS:
+            order = Order.submit(
+                order_id=OrderId(generate_id("ord")),
+                tenant_id=TenantId(tenant_id),
+                client_reference=f"PO-{tenant_id}-{index + 1:03d}",
+                lines=[
+                    OrderLine(
+                        product_key="ANVIL",
+                        quantity=Decimal(index + 1),
+                        unit_of_measure="each",
+                        line_id=generate_id("line"),
+                    )
+                ],
+                routed_to_connection_id=str(connection.connection_id),
+            )
+            repo.save(order)
+    container.drain()
+
+
 def _build_memory_container(settings: Settings) -> Container:
     event_store = InMemoryEventStore()
     bus = InMemoryMessageBus()
@@ -381,17 +521,19 @@ def _build_memory_container(settings: Settings) -> Container:
     projections = OrderProjectionStore()
     locator = InMemoryOrderLocator()
 
-    erp_adapter: ErpAdapter = StubErpAdapter()
+    erp_adapter: ErpAdapter = _demo_erp_adapter(settings)
 
     def adapter_for(_erp_type):
         return erp_adapter
 
     processor = OrderProcessor(repo, TenancyBindingQuery(bindings))
+    conflicts = ConflictService(InMemoryConflictRepository(), rules=InMemorySeverityRules())
     delivery = DeliveryHandler(
         connections=ConnectionsResolver(connections, secrets),
         orders_read=OrderReaderAdapter(projections, TenancyCustomerDirectory(bindings)),
         orders_cmd=OrderCommandAdapter(repo),
         adapter_for=adapter_for,
+        failures=OrderConflictRecorder(conflicts, projections),
     )
     projector = OrderProjector(projections, locator=locator)
 
@@ -448,7 +590,7 @@ def _build_memory_container(settings: Settings) -> Container:
         mapping_service, StubSampleRequestSuggester()
     )
 
-    return Container(
+    container = Container(
         settings=settings,
         order_service=OrderService(repo),
         projections=projections,
@@ -480,6 +622,9 @@ def _build_memory_container(settings: Settings) -> Container:
         subsidiaries=subsidiaries,
         subsidiary_routes=subsidiary_routes,
         mapping_service=mapping_service,
+        conflicts=conflicts,
+        conflict_explainer=_conflict_explainer(settings, secrets),
+        cause_classifier=_cause_classifier(settings, secrets),
         mapping_jobs=mapping_jobs,
         mapping_proposer=mapping_proposer,
         # memory profile has no worker — process the just-submitted job inline (offline stub)
@@ -487,6 +632,9 @@ def _build_memory_container(settings: Settings) -> Container:
         sample_request_suggestion=sample_request_suggestion,
         has_adapter=lambda _erp_type: False,
     )
+    if settings.demo_reject_erp_customers:
+        _seed_demo_conflicts(container, repo)
+    return container
 
 
 def _resolve_adapter_for(settings: Settings) -> Callable[[str], ErpAdapter]:
@@ -638,11 +786,16 @@ def _build_postgres_container(settings: Settings) -> Container:
     status_applier = StatusApplier(repo)
 
     processor = OrderProcessor(repo, TenancyBindingQuery(bindings))
+    conflicts = ConflictService(
+        PostgresConflictRepository(session_factory),
+        rules=PostgresSeverityRuleRepository(session_factory),
+    )
     delivery = DeliveryHandler(
         connections=connections_resolver,
         orders_read=OrderReaderAdapter(projections, TenancyCustomerDirectory(bindings)),
         orders_cmd=OrderCommandAdapter(repo),
         adapter_for=adapter_for,
+        failures=OrderConflictRecorder(conflicts, projections),
     )
     projector = OrderProjector(projections, locator=locator)
 
@@ -776,6 +929,9 @@ def _build_postgres_container(settings: Settings) -> Container:
         subsidiaries=subsidiaries,
         subsidiary_routes=subsidiary_routes,
         mapping_service=mapping_service,
+        conflicts=conflicts,
+        conflict_explainer=_conflict_explainer(settings, secrets),
+        cause_classifier=_cause_classifier(settings, secrets),
         mapping_jobs=mapping_jobs,
         mapping_proposer=mapping_proposer,
         # the `mapping` worker role runs the LLM off the request path — not inline here

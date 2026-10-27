@@ -300,3 +300,35 @@ def test_fulfillment_status_survives_event_replay() -> None:
     reloaded = repo.get("ord_pf")
     assert reloaded.fulfillment_status is FulfillmentStatus.PARTIALLY_FULFILLED
     assert reloaded.shipped_qty_by_line["l_anvil"] == Decimal(10)
+
+
+def test_erp_refusal_during_delivery_is_recorded_as_a_rejection() -> None:
+    from src.modules.sales.ordering.domain.events import OrderRejected
+
+    order = _order()
+    order.validate()
+    order.accept()
+    order.reject("erp_rejected", "customer on hold")
+    events = order.collect_events()
+    assert isinstance(events[-1], OrderRejected)
+    assert events[-1].reason_code == "erp_rejected"
+
+
+def test_erp_refusal_after_retries_is_recorded_as_a_rejection() -> None:
+    from src.modules.sales.ordering.domain.events import OrderRejected
+
+    order = _order()
+    order.validate()
+    order.accept()
+    order.mark_retrying(attempt=1, next_retry_at="2026-10-26T10:00:00Z")
+    order.reject("erp_rejected", "customer on hold")
+    assert isinstance(order.collect_events()[-1], OrderRejected)
+
+
+def test_a_refusal_after_the_erp_took_the_order_is_still_invalid() -> None:
+    order = _order()
+    order.validate()
+    order.accept()
+    order.send_to_erp("S1")
+    with pytest.raises(OrderInvalidTransition):
+        order.reject("erp_rejected", "too late")

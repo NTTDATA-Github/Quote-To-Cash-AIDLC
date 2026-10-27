@@ -7,11 +7,21 @@ schema holds no new business logic.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 import strawberry
 from strawberry.extensions import QueryDepthLimiter
 
+from src.modules.integration.conflicts.application.causes import cause_of
+from src.modules.integration.conflicts.domain.categories import LABELS, ConflictCategory
+from src.modules.integration.conflicts.domain.models import (
+    ConflictExplanationUnavailable,
+    ConflictNotFound,
+    ConflictStatus,
+    OrderConflict,
+    SeverityRule,
+)
 from src.modules.integration.mapping.domain.canonical_order_schema import (
     build_canonical_order_fields_csv,
 )
@@ -41,6 +51,7 @@ from .types import (
     AuthConfigInput,
     BindingType,
     CanonicalSchemaType,
+    ConflictExplanationType,
     ConnectionType,
     ErpFieldType,
     ErpRouteType,
@@ -53,11 +64,13 @@ from .types import (
     OperatorOrderLineType,
     OperatorPartiesType,
     OperatorTimelineEntryType,
+    OrderConflictType,
     OrderEventType,
     ProbeSampleType,
     ResellerType,
     SampleFileInput,
     SampleRequestInput,
+    SeverityRuleType,
     SubsidiaryType,
     SuggestedRequestType,
     WebhookEndpointCreatedType,
@@ -69,6 +82,7 @@ if TYPE_CHECKING:
 
     from strawberry.types import Info
 
+    from src.modules.integration.conflicts.application.ports import CauseClassifier
     from src.modules.integration.mapping.domain.models import (
         AdapterRunResult,
         MappingJob,
@@ -86,6 +100,9 @@ if TYPE_CHECKING:
     from src.shared.money import Money
 
     from ..context import GraphQLContext
+
+
+logger = logging.getLogger(__name__)
 
 
 def _money_to_gql(money: Money | None) -> MoneyType | None:
@@ -160,6 +177,34 @@ def _binding_to_gql(binding: TenantConnectionBinding) -> BindingType:
         connection_id=str(binding.connection_id),
         erp_customer_id=binding.erp_customer_id,
         status=binding.status.value,
+    )
+
+
+def _rule_to_gql(rule: SeverityRule) -> SeverityRuleType:
+    return SeverityRuleType(
+        category=rule.category,
+        label=LABELS[ConflictCategory(rule.category)],
+        when_rejected=rule.when_rejected.value,
+        when_retrying=rule.when_retrying.value,
+    )
+
+
+def _conflict_to_gql(conflict: OrderConflict, classifier: CauseClassifier) -> OrderConflictType:
+    return OrderConflictType(
+        conflict_id=conflict.conflict_id,
+        tenant_id=conflict.tenant_id,
+        order_id=conflict.order_id,
+        reason_code=conflict.reason_code,
+        reason=conflict.reason,
+        severity=conflict.severity.value,
+        status=conflict.status.value,
+        attempts=conflict.attempts,
+        opened_at=conflict.opened_at.isoformat(),
+        sla_due_at=conflict.sla_due_at.isoformat(),
+        resolved_at=conflict.resolved_at.isoformat() if conflict.resolved_at else None,
+        resolution_note=conflict.resolution_note,
+        category=cause_of(conflict.reason_code, conflict.reason, classifier)[0].value,
+        category_source=cause_of(conflict.reason_code, conflict.reason, classifier)[1],
     )
 
 
@@ -302,6 +347,64 @@ class Query:
             endpoint_to_gql(e)
             for e in ctx.container.webhook_endpoints.list_by_tenant(TenantId(tenant_id))
         ]
+
+    @strawberry.field
+    def order_conflicts(
+        self, info: Info[GraphQLContext, None], status: str | None = None
+    ) -> list[OrderConflictType]:
+        """Failed or rejected deliveries, newest first. `status` filters to one state."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        wanted = ConflictStatus(status) if status else None
+        return [
+            _conflict_to_gql(c, ctx.container.cause_classifier)
+            for c in ctx.container.conflicts.list(wanted)
+        ]
+
+    @strawberry.field
+    def order_conflict(
+        self, info: Info[GraphQLContext, None], conflict_id: str
+    ) -> OrderConflictType | None:
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            return _conflict_to_gql(
+                ctx.container.conflicts.get(conflict_id), ctx.container.cause_classifier
+            )
+        except ConflictNotFound:
+            return None
+
+    @strawberry.field
+    def conflict_severity_rules(self, info: Info[GraphQLContext, None]) -> list[SeverityRuleType]:
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        return [_rule_to_gql(r) for r in ctx.container.conflicts.severity_rules()]
+
+    @strawberry.field
+    def conflict_explanation(
+        self, info: Info[GraphQLContext, None], conflict_id: str
+    ) -> ConflictExplanationType:
+        """An AI summary of one conflict, from its facts only. Never an error to the operator:
+        when no summary can be given, the reason comes back instead."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            conflict = ctx.container.conflicts.get(conflict_id)
+        except ConflictNotFound as e:
+            raise Exception(f"no conflict {conflict_id}") from e
+        reseller = ctx.container.resellers.get(TenantId(conflict.tenant_id))
+        reseller_name = reseller.name if reseller else conflict.tenant_id
+        try:
+            text = ctx.container.conflict_explainer.explain(conflict, reseller_name)
+        except ConflictExplanationUnavailable as e:
+            return ConflictExplanationType(text=None, unavailable=str(e))
+        except Exception:
+            logger.exception("conflict summary failed for %s", conflict_id)
+            return ConflictExplanationType(
+                text=None,
+                unavailable="The summary could not be written right now. Try again in a moment.",
+            )
+        return ConflictExplanationType(text=text, unavailable=None)
 
     @strawberry.field
     def connections(self, info: Info[GraphQLContext, None]) -> list[ConnectionType]:
@@ -538,6 +641,25 @@ class Mutation:
         return WebhookEndpointCreatedType(
             endpoint=endpoint_to_gql(endpoint), signing_secret=raw_secret
         )
+
+    @strawberry.mutation
+    def set_conflict_severity_rule(
+        self,
+        info: Info[GraphQLContext, None],
+        category: str,
+        when_rejected: str,
+        when_retrying: str,
+    ) -> SeverityRuleType:
+        """Changes how urgent one cause is. Applies to conflicts opened from now on."""
+        ctx = info.context
+        ctx.require_role("OPERATOR")
+        try:
+            rule = ctx.container.conflicts.set_severity_rule(
+                category, when_rejected=when_rejected, when_retrying=when_retrying
+            )
+        except ValueError as e:
+            raise Exception(str(e)) from e
+        return _rule_to_gql(rule)
 
     @strawberry.mutation
     def pause_webhook_endpoint(

@@ -91,6 +91,9 @@ class Settings:
     # being tested (local Odoo, the NetSuite mock) is deliberately on localhost, which the
     # guard correctly refuses in a real deployment. Never set this in staging/production.
     erp_probe_allow_private_addresses: bool
+    # Demo only: ERP customer ids whose orders the stub ERP rejects, so conflicts can be seen.
+    # Empty in every real environment.
+    demo_reject_erp_customers: frozenset[str]
 
 
 def _parse_worker_roles(raw: str) -> frozenset[str]:
@@ -109,6 +112,11 @@ def _parse_worker_roles(raw: str) -> frozenset[str]:
 def get_settings() -> Settings:
     return Settings(
         profile=os.environ.get("APP_PROFILE", "memory"),
+        demo_reject_erp_customers=frozenset(
+            c.strip()
+            for c in os.environ.get("DEMO_REJECT_ERP_CUSTOMERS", "").split(",")
+            if c.strip()
+        ),
         database_url=os.environ.get(
             "DATABASE_URL", "postgresql+psycopg2://portal:portal@localhost:5432/portal"
         ),
