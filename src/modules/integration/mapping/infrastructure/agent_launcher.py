@@ -24,18 +24,25 @@ if TYPE_CHECKING:
 
 
 class HttpAdapterRunLauncher:
-    def __init__(self, base_url: str, timeout_seconds: float = 15.0) -> None:
+    def __init__(
+        self, base_url: str, api_token: str | None = None, timeout_seconds: float = 15.0
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
+        self._headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
 
     def launch(self, erp_name: str, mapping: list[MappingEntry]) -> str:
         payload = {"erp_name": erp_name, "mapping": [asdict(entry) for entry in mapping]}
-        response = httpx.post(f"{self._base_url}/runs", json=payload, timeout=self._timeout)
+        response = httpx.post(
+            f"{self._base_url}/runs", json=payload, headers=self._headers, timeout=self._timeout
+        )
         response.raise_for_status()
         return str(response.json()["run_id"])
 
     def get_run(self, run_id: str) -> AdapterRunResult:
-        response = httpx.get(f"{self._base_url}/runs/{run_id}", timeout=self._timeout)
+        response = httpx.get(
+            f"{self._base_url}/runs/{run_id}", headers=self._headers, timeout=self._timeout
+        )
         response.raise_for_status()
         body = response.json()
         result = body.get("result") or {}

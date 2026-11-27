@@ -888,7 +888,7 @@ def _build_postgres_container(settings: Settings) -> Container:
     mapping_service = MappingService(
         mapping_jobs,
         PostgresCanonicalSchemaRepository(session_factory),
-        HttpAdapterRunLauncher(settings.agent_service_url),
+        HttpAdapterRunLauncher(settings.agent_service_url, settings.agent_api_token),
         erp_probe,
         secrets,
         connections,

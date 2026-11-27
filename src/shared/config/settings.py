@@ -87,6 +87,10 @@ class Settings:
     # OpenAI model for mapping (e.g., "gpt-4o"). Used when mapping_llm_provider="openai".
     mapping_openai_model: str
     agent_service_url: str
+    # Shared secret erp-agent-service requires on every request — see its own
+    # AGENT_API_TOKEN check in service/app.py. Unset means that service refuses all
+    # requests, so this must match whatever it was started with.
+    agent_api_token: str | None
     # Local-dev-only escape hatch for GenericErpProbe's SSRF guard (ADR-0021) — the ERP
     # being tested (local Odoo, the NetSuite mock) is deliberately on localhost, which the
     # guard correctly refuses in a real deployment. Never set this in staging/production.
@@ -154,6 +158,7 @@ def get_settings() -> Settings:
         mapping_llm_provider=os.environ.get("MAPPING_LLM_PROVIDER"),
         mapping_openai_model=os.environ.get("MAPPING_OPENAI_MODEL", "gpt-4o"),
         agent_service_url=os.environ.get("AGENT_SERVICE_URL", "http://localhost:8002"),
+        agent_api_token=os.environ.get("AGENT_API_TOKEN"),
         erp_probe_allow_private_addresses=os.environ.get(
             "ERP_PROBE_ALLOW_PRIVATE_ADDRESSES", "false"
         ).lower()

@@ -52,6 +52,47 @@ AGENT_TIMEOUT_SECONDS = int(os.environ.get("AGENT_TIMEOUT_SECONDS", "1800"))
 # Sonnet is the right default for this task; override via env if you want something else.
 CODING_AGENT_MODEL = os.environ.get("CODING_AGENT_MODEL", "us.anthropic.claude-sonnet-5")
 
+# OS basics the `claude` subprocess needs to run at all on Windows or POSIX, plus its own
+# auth/config vars (CLAUDE_*, AWS_*, ANTHROPIC_*). Never GITHUB_TOKEN: this process's prompt
+# is built from ERP field names, which are untrusted input, and the push/PR steps that
+# actually need that token run separately, after this subprocess has already exited.
+_AGENT_ENV_KEYS = {
+    "PATH",
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "WINDIR",
+    "TEMP",
+    "TMP",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "USERPROFILE",
+    "HOME",
+    "HOMEDRIVE",
+    "HOMEPATH",
+    "USER",
+    "USERNAME",
+    "COMSPEC",
+    "PATHEXT",
+    "NUMBER_OF_PROCESSORS",
+    "PROCESSOR_ARCHITECTURE",
+    "LANG",
+    "LC_ALL",
+}
+_AGENT_ENV_PREFIXES = ("CLAUDE_", "AWS_", "ANTHROPIC_")
+
+
+def _agent_env() -> dict[str, str]:
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k in _AGENT_ENV_KEYS or k.startswith(_AGENT_ENV_PREFIXES)
+    }
+    # On this network, a corporate proxy rewrites Bedrock's streaming response
+    # content-type, which Claude Code otherwise rejects outright (confirmed via a
+    # direct test — same class of TLS interception seen earlier with pip).
+    env["CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD"] = "1"
+    return env
+
 
 class AgentRunError(Exception):
     pass
@@ -217,8 +258,9 @@ def _run(cmd: list[str], cwd: Path, timeout: int) -> str:
         timeout=timeout,
     )
     if result.returncode != 0:
+        joined = " ".join(_redact(cmd))
         raise AgentRunError(
-            f"{' '.join(_redact(cmd))} failed (exit {result.returncode}):\n{result.stdout}\n{result.stderr}"
+            f"{joined} failed (exit {result.returncode}):\n{result.stdout}\n{result.stderr}"
         )
     return result.stdout
 
@@ -314,12 +356,7 @@ def find_stale_worktree(erp_name: str, mapping: list[dict]) -> tuple[Path, str] 
 
 
 def run_coding_agent(worktree_path: Path, prompt: str) -> str:
-    # On this network, a corporate proxy rewrites Bedrock's streaming response
-    # content-type, which Claude Code otherwise rejects outright (confirmed via a
-    # direct test — same class of TLS interception seen earlier with pip). Set
-    # explicitly here rather than only documented in .env.example, since a var only
-    # in the example file doesn't reliably make it into anyone's actual .env.
-    env = {**os.environ, "CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD": "1"}
+    env = _agent_env()
     # Mirrors the deny-list from the earlier Kiro-agent design for this same task —
     # the agent never needs to commit/push itself (we do that in a separate step
     # with a scoped, redacted-on-failure token) or touch package managers/containers.
@@ -424,7 +461,7 @@ def create_pull_request(branch_name: str, title: str, body: str) -> str:
         return data["html_url"]
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")
-        raise AgentRunError(f"GitHub PR creation failed (HTTP {e.code}): {detail}")
+        raise AgentRunError(f"GitHub PR creation failed (HTTP {e.code}): {detail}") from e
 
 
 def run_approval(erp_name: str, mapping: list[dict]) -> dict:

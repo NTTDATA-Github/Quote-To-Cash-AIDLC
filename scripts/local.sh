@@ -20,6 +20,13 @@ export ERP_PROBE_ALLOW_PRIVATE_ADDRESSES="${ERP_PROBE_ALLOW_PRIVATE_ADDRESSES:-t
 KEYCLOAK_REALM_URL="http://localhost:8080/realms/o2c"
 export KEYCLOAK_ISSUER="$KEYCLOAK_REALM_URL"
 export KEYCLOAK_CLIENT_ID="o2c-portal"
+# erp-agent-service refuses every request without this (see its own AGENT_API_TOKEN
+# check) — read it from that service's .env so the api sends the same value it does,
+# rather than keeping the secret in two places that could drift apart.
+if [[ -f erp-agent-service/.env ]]; then
+  AGENT_API_TOKEN="$(grep -m1 '^AGENT_API_TOKEN=' erp-agent-service/.env | cut -d= -f2-)"
+  [[ -n "$AGENT_API_TOKEN" ]] && export AGENT_API_TOKEN
+fi
 
 if [[ -x .venv/Scripts/python.exe ]]; then
   PY=".venv/Scripts/python.exe"

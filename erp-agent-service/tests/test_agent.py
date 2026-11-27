@@ -119,6 +119,38 @@ def test_run_coding_agent_disallows_mutating_git_and_escalation_commands(monkeyp
         assert pattern in disallowed
 
 
+def test_run_coding_agent_never_passes_github_token_to_the_subprocess(monkeypatch, tmp_path):
+    """Regression test: the subprocess used to inherit the whole environment
+    ({**os.environ}), including GITHUB_TOKEN — a real exfiltration path, since the
+    agent's prompt is built from ERP field names, which are untrusted input."""
+    import service.agent as agent
+
+    monkeypatch.setenv("GITHUB_TOKEN", "super-secret-token")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///should-not-be-passed-through.db")
+    monkeypatch.setenv("AWS_REGION", "us-east-1")
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs.get("env")
+
+        class _Result:
+            returncode = 0
+            stdout = "ok"
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(agent.subprocess, "run", fake_run)
+    agent.run_coding_agent(tmp_path, "do the thing")
+
+    env = captured["env"]
+    assert "GITHUB_TOKEN" not in env
+    assert "DATABASE_URL" not in env
+    assert env.get("AWS_REGION") == "us-east-1"
+    assert env.get("CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD") == "1"
+
+
 def test_ensure_repo_fails_clearly_without_target_repo_url(monkeypatch, tmp_path):
     agent = _fresh_agent_module(monkeypatch, REPO_CACHE_DIR=str(tmp_path / "cache"))
     with pytest.raises(agent.AgentRunError, match="TARGET_REPO_URL is not set"):
