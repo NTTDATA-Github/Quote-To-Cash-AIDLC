@@ -8,10 +8,12 @@ import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import {
   useConflictExplanation,
+  useOperatorOrders,
   useOrderConflicts,
   useResellers,
   useSetSeverityRule,
   useSeverityRules,
+  useSubsidiaries,
 } from "../../hooks/useAdmin";
 import type { ConflictCategory, OrderConflict } from "../../api/queries/admin";
 import { statusLabel } from "../../lib/statusLabel";
@@ -73,6 +75,57 @@ function median(values: number[]): number | null {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+const AGE_BUCKETS: { label: string; minHours: number; maxHours: number }[] = [
+  { label: "0–4h", minHours: 0, maxHours: 4 },
+  { label: "4–24h", minHours: 4, maxHours: 24 },
+  { label: "1–3d", minHours: 24, maxHours: 72 },
+  { label: "3–7d", minHours: 72, maxHours: 168 },
+  { label: ">7d", minHours: 168, maxHours: Infinity },
+];
+
+/** How long open conflicts have been sitting, bucketed — oldest bucket last. */
+function ageingBuckets(
+  open: OrderConflict[],
+  now: number,
+): { label: string; count: number; overdue: number }[] {
+  return AGE_BUCKETS.map(({ label, minHours, maxHours }) => {
+    const inBucket = open.filter((c) => {
+      const ageHours = (now - new Date(c.openedAt).getTime()) / 3_600_000;
+      return ageHours >= minHours && ageHours < maxHours;
+    });
+    return { label, count: inBucket.length, overdue: inBucket.filter((c) => deadline(c, now).overdue).length };
+  });
+}
+
+interface CountryGroup {
+  country: string;
+  open: OrderConflict[];
+  overdue: number;
+  resellers: string[];
+}
+
+/** Open conflicts grouped by the country of the subsidiary their order routed through. */
+function countryBreakdown(
+  open: OrderConflict[],
+  countryOf: (orderId: string) => string,
+  resellerName: (tenantId: string) => string,
+  now: number,
+): CountryGroup[] {
+  const byCountry = new Map<string, OrderConflict[]>();
+  for (const c of open) {
+    const country = countryOf(c.orderId);
+    byCountry.set(country, [...(byCountry.get(country) ?? []), c]);
+  }
+  return [...byCountry.entries()]
+    .map(([country, conflicts]) => ({
+      country,
+      open: conflicts,
+      overdue: conflicts.filter((c) => deadline(c, now).overdue).length,
+      resellers: [...new Set(conflicts.map((c) => resellerName(c.tenantId)))],
+    }))
+    .sort((a, b) => b.open.length - a.open.length);
 }
 
 function formatWhen(iso: string): string {
@@ -166,6 +219,8 @@ export function ConflictResolutionPage() {
   // One fetch; everything on the page is derived from this list.
   const { data: conflicts, isLoading, error } = useOrderConflicts(null);
   const { data: resellers } = useResellers();
+  const { data: orders = [] } = useOperatorOrders();
+  const { data: subsidiaries = [] } = useSubsidiaries();
   const explanation = useConflictExplanation(selectedId);
 
   const now = Date.now();
@@ -199,6 +254,17 @@ export function ConflictResolutionPage() {
   const overdueCount = openList.filter((c) => deadline(c, now).overdue).length;
   const medianAgeHours = median(openList.map((c) => (now - new Date(c.openedAt).getTime()) / 3_600_000));
   const recovered = all.filter((c) => c.status === "RESOLVED").length;
+
+  // Country comes from the subsidiary the order's parties route through, not from the
+  // conflict or reseller directly — neither carries a country of its own.
+  const subsidiaryCountry = new Map(subsidiaries.map((s) => [s.subsidiaryId, s.country]));
+  const orderCountry = new Map(orders.map((o) => [o.orderId, subsidiaryCountry.get(o.parties.subsidiaryId)]));
+  const countryOf = (orderId: string) => orderCountry.get(orderId) ?? "Unknown";
+  const ageBuckets = useMemo(() => ageingBuckets(openList, now), [openList, now]);
+  const countries = useMemo(
+    () => countryBreakdown(openList, countryOf, resellerName, now),
+    [openList, orders, subsidiaries, now],
+  );
 
   const counts: Record<StateFilter, number> = {
     all: all.length,
@@ -341,6 +407,82 @@ export function ConflictResolutionPage() {
           </div>
         )}
       </section>
+
+      <div className="dash-split">
+        <section className="panel stack" aria-labelledby="ageing-heading">
+          <div className="panel-head">
+            <h2 id="ageing-heading">Ageing of open conflicts</h2>
+            <span className="muted">How long they've been sitting, oldest last</span>
+          </div>
+          <div className="erp-table-wrap">
+            <table className="erp-table">
+              <thead>
+                <tr>
+                  <th>Age</th>
+                  <th style={{ textAlign: "right" }}>Open</th>
+                  <th style={{ textAlign: "right" }}>Overdue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ageBuckets.map((b) => (
+                  <tr key={b.label}>
+                    <td>{b.label}</td>
+                    <td style={{ textAlign: "right" }}>{b.count}</td>
+                    <td style={{ textAlign: "right" }}>
+                      {b.overdue > 0 ? (
+                        <span className="erp-badge erp-badge--danger">{b.overdue}</span>
+                      ) : (
+                        <span className="muted">0</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="panel stack" aria-labelledby="country-heading">
+          <div className="panel-head">
+            <h2 id="country-heading">Open conflicts by country</h2>
+            <span className="muted">The country of the subsidiary each order routed through</span>
+          </div>
+          {countries.length === 0 ? (
+            <p className="muted">No open conflicts.</p>
+          ) : (
+            <div className="erp-table-wrap">
+              <table className="erp-table">
+                <thead>
+                  <tr>
+                    <th>Country</th>
+                    <th style={{ textAlign: "right" }}>Open</th>
+                    <th style={{ textAlign: "right" }}>Overdue</th>
+                    <th>Resellers</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {countries.map((g) => (
+                    <tr key={g.country}>
+                      <td>{g.country}</td>
+                      <td style={{ textAlign: "right" }}>{g.open.length}</td>
+                      <td style={{ textAlign: "right" }}>
+                        {g.overdue > 0 ? (
+                          <span className="erp-badge erp-badge--danger">{g.overdue}</span>
+                        ) : (
+                          <span className="muted">0</span>
+                        )}
+                      </td>
+                      <td className="muted" style={{ fontSize: 12 }}>
+                        {g.resellers.join(", ")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      </div>
 
       <SeverityRulesEditor />
 
