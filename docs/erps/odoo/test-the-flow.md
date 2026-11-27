@@ -49,7 +49,7 @@ Each block says why it exists, how to see that it is already done, and what to d
 | Screen | Already set up when you see |
 |---|---|
 | **ERP connections** | `conn_odoo_local`, label **Local Odoo (dev)**, type Odoo, status ACTIVE, URL `http://localhost:8069` |
-| **Resellers** | binding `bind_demo`, tenant `tnt_demo`, connection `conn_odoo_local`, ERP customer id **`1`**, status VERIFIED |
+| **Resellers** | binding `bind_demo`, tenant `tnt_acme`, connection `conn_odoo_local`, ERP customer id **`1`**, status VERIFIED |
 | **Subsidiaries** | `sub_demo`, name **Demo subsidiary**, country US, connection `conn_odoo_local`, Odoo company id **`1`** |
 
 **If all three match:** leave them. Creating another binding for the same connection, or another subsidiary on `conn_odoo_local`, is rejected. One connection belongs to one subsidiary.
@@ -193,7 +193,7 @@ Wait up to 30 seconds. In AdminOps open **Orders**.
 | Column | Value |
 |---|---|
 | Order id | `ord_conn_odoo_local_S00…` |
-| Reseller | `tnt_demo` |
+| Reseller | `tnt_acme` |
 | Reference | `TEST-PO-001` |
 | ERP order | `S00…` |
 | Status | `SENT_TO_ERP` |
@@ -282,7 +282,7 @@ The secret `odoo-webhook-demo` is already stored for `conn_odoo_local`. Do not c
 
 ## Done when
 
-- AdminOps **Orders** has `ord_conn_odoo_local_S00…` for reseller `tnt_demo`.
+- AdminOps **Orders** has `ord_conn_odoo_local_S00…` for reseller `tnt_acme`.
 - Reference is `TEST-PO-001`, ERP order is your `S00…` number, product is `FURN_0269`, quantity is 2.
 - Status is `CLOSED`.
 - Delivered quantity is 2 and invoiced quantity is 2.

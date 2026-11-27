@@ -17,7 +17,7 @@ bash scripts/local.sh up
 | Odoo | http://localhost:8069 — `admin` / `admin` |
 | AdminOps | http://localhost:5173 — `demo-operator` / `DemoPass123!` |
 | Connection | `conn_odoo_local` |
-| Binding | `tnt_demo` → Odoo partner id **`1`** |
+| Binding | `tnt_acme` → Odoo partner id **`1`** |
 | Distributor | `sub_demo` → Odoo company id **`1`**. A quotation for any other company is not adopted. |
 | Webhook secret | `odoo-webhook-demo` |
 

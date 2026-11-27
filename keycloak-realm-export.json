@@ -65,7 +65,7 @@
       "requiredActions": [],
       "realmRoles": ["OPERATOR"],
       "attributes": {
-        "tenant_id": ["tnt_demo"]
+        "tenant_id": ["tnt_acme"]
       }
     }
   ]

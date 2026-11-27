@@ -321,7 +321,7 @@ def main():
     )
     parser.add_argument(
         "--tenant-id",
-        default="tnt_demo",  # the only real tenant in the staging Keycloak realm (operator1)
+        default="tnt_acme",  # the only real tenant in the staging Keycloak realm (operator1)
         help="Reseller tenant ID",
     )
     parser.add_argument(

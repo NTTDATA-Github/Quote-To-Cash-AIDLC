@@ -226,7 +226,7 @@ mutation($erpType: String!, $label: String!, $baseUrl: String!, $credentials: JS
 """
 _CREATE_BINDING = """
 mutation($connectionId: String!, $erpCustomerId: String!, $name: String!) {
-  createBinding(tenantId: "tnt_demo", connectionId: $connectionId,
+  createBinding(tenantId: "tnt_acme", connectionId: $connectionId,
     erpCustomerId: $erpCustomerId, name: $name) { bindingId }
 }
 """
@@ -245,11 +245,11 @@ mutation($subsidiaryId: String!, $connectionId: String!, $erpCompanyId: String!)
 }
 """
 _RENAME_RESELLER = """
-mutation($name: String!) { renameReseller(tenantId: "tnt_demo", name: $name) { tenantId } }
+mutation($name: String!) { renameReseller(tenantId: "tnt_acme", name: $name) { tenantId } }
 """
 _REGISTER_WEBHOOK = """
 mutation($name: String!, $url: String!) {
-  registerWebhookEndpoint(name: $name, url: $url) { signingSecret }
+  registerResellerWebhook(tenantId: "tnt_acme", name: $name, url: $url) { signingSecret }
 }
 """
 
@@ -319,13 +319,12 @@ def _seed_operator(odoo_partner_id: str) -> None:
 
 
 def _seed_reseller() -> None:
-    data = _gql(
-        "/graphql/reseller",
+    data = _operator(
         _REGISTER_WEBHOOK,
         {"name": "Local reseller mock", "url": RESELLER_MOCK_URL},
     )
     RESELLER_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
-    secret = data["registerWebhookEndpoint"]["signingSecret"]
+    secret = data["registerResellerWebhook"]["signingSecret"]
     RESELLER_SECRET_FILE.write_text(secret, encoding="utf-8")
     print(f"reseller webhook -> {RESELLER_MOCK_URL} (secret in {RESELLER_SECRET_FILE})")
 
