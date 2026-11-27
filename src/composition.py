@@ -351,8 +351,6 @@ class Container:
     # Order conflicts: failed or rejected deliveries awaiting an operator (view-only for now).
     conflicts: ConflictService
     conflict_explainer: ConflictExplainer
-    # Suggests a cause for ERP messages the rules don't recognise (grouping only, never severity).
-    cause_classifier: CauseClassifier
     mapping_proposer: MappingProposer
     mapping_process_pending: Callable[[], int]
     # Suggests which record kinds/paths to pull live during onboarding (separate from
@@ -527,7 +525,11 @@ def _build_memory_container(settings: Settings) -> Container:
         return erp_adapter
 
     processor = OrderProcessor(repo, TenancyBindingQuery(bindings))
-    conflicts = ConflictService(InMemoryConflictRepository(), rules=InMemorySeverityRules())
+    conflicts = ConflictService(
+        InMemoryConflictRepository(),
+        rules=InMemorySeverityRules(),
+        classifier=_cause_classifier(settings, secrets),
+    )
     delivery = DeliveryHandler(
         connections=ConnectionsResolver(connections, secrets),
         orders_read=OrderReaderAdapter(projections, TenancyCustomerDirectory(bindings)),
@@ -624,7 +626,6 @@ def _build_memory_container(settings: Settings) -> Container:
         mapping_service=mapping_service,
         conflicts=conflicts,
         conflict_explainer=_conflict_explainer(settings, secrets),
-        cause_classifier=_cause_classifier(settings, secrets),
         mapping_jobs=mapping_jobs,
         mapping_proposer=mapping_proposer,
         # memory profile has no worker — process the just-submitted job inline (offline stub)
@@ -789,6 +790,7 @@ def _build_postgres_container(settings: Settings) -> Container:
     conflicts = ConflictService(
         PostgresConflictRepository(session_factory),
         rules=PostgresSeverityRuleRepository(session_factory),
+        classifier=_cause_classifier(settings, secrets),
     )
     delivery = DeliveryHandler(
         connections=connections_resolver,
@@ -931,7 +933,6 @@ def _build_postgres_container(settings: Settings) -> Container:
         mapping_service=mapping_service,
         conflicts=conflicts,
         conflict_explainer=_conflict_explainer(settings, secrets),
-        cause_classifier=_cause_classifier(settings, secrets),
         mapping_jobs=mapping_jobs,
         mapping_proposer=mapping_proposer,
         # the `mapping` worker role runs the LLM off the request path — not inline here

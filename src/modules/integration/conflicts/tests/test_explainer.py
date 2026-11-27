@@ -86,6 +86,32 @@ def test_the_client_is_built_only_when_a_summary_is_first_asked_for() -> None:
     assert len(built) == 1
 
 
+def test_a_changed_reseller_name_gets_a_fresh_summary() -> None:
+    """Regression test: the cache used to be keyed on (conflict_id, attempts, reason)
+    only, so a reseller rename between two views of the same conflict silently kept
+    serving the old reseller's name in the summary. Now keyed on the rendered facts
+    themselves, which include the reseller name."""
+    client = FakeClient()
+    explainer = LlmConflictExplainer(lambda: client)
+    explainer.explain(_conflict(), "EXN")
+    explainer.explain(_conflict(), "EXN (renamed)")
+    assert len(client.calls) == 2
+
+
+def test_a_changed_severity_gets_a_fresh_summary() -> None:
+    """Same regression, for severity: HIGH vs MEDIUM renders a different sentence in
+    _facts() ("the ERP rejected the order" vs "delivery is still being retried"), which
+    the old (conflict_id, attempts, reason)-only key couldn't see."""
+    client = FakeClient()
+    explainer = LlmConflictExplainer(lambda: client)
+    high = _conflict()
+    medium = _conflict()
+    medium.severity = Severity.MEDIUM
+    explainer.explain(high, "EXN")
+    explainer.explain(medium, "EXN")
+    assert len(client.calls) == 2
+
+
 def test_without_a_provider_the_summary_says_why_it_is_unavailable() -> None:
     with pytest.raises(ConflictExplanationUnavailable, match="LLM_PROVIDER"):
         UnavailableConflictExplainer().explain(_conflict(), "EXN")

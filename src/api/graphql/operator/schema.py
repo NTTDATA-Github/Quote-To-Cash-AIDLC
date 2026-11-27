@@ -22,8 +22,7 @@ if TYPE_CHECKING:
 else:
     JSON = strawberry.scalars.JSON
 
-from src.modules.integration.conflicts.application.causes import cause_of
-from src.modules.integration.conflicts.domain.categories import LABELS, ConflictCategory
+from src.modules.integration.conflicts.domain.categories import LABELS, ConflictCategory, classify
 from src.modules.integration.conflicts.domain.models import (
     ConflictExplanationUnavailable,
     ConflictNotFound,
@@ -91,7 +90,6 @@ if TYPE_CHECKING:
 
     from strawberry.types import Info
 
-    from src.modules.integration.conflicts.application.ports import CauseClassifier
     from src.modules.integration.mapping.domain.models import (
         AdapterRunResult,
         MappingJob,
@@ -198,7 +196,16 @@ def _rule_to_gql(rule: SeverityRule) -> SeverityRuleType:
     )
 
 
-def _conflict_to_gql(conflict: OrderConflict, classifier: CauseClassifier) -> OrderConflictType:
+def _conflict_to_gql(conflict: OrderConflict) -> OrderConflictType:
+    # category/category_source are computed once, in ConflictService.record_failure, not
+    # here on every read. None only for a conflict recorded before that column existed -
+    # fall back to the rule-only classifier for those, never a live LLM call for old history.
+    if conflict.category is not None and conflict.category_source is not None:
+        category, category_source = conflict.category, conflict.category_source
+    else:
+        by_rule = classify(conflict.reason_code, conflict.reason)
+        category = by_rule.value
+        category_source = "RULE" if by_rule is not ConflictCategory.OTHER else "UNRECOGNISED"
     return OrderConflictType(
         conflict_id=conflict.conflict_id,
         tenant_id=conflict.tenant_id,
@@ -212,8 +219,8 @@ def _conflict_to_gql(conflict: OrderConflict, classifier: CauseClassifier) -> Or
         sla_due_at=conflict.sla_due_at.isoformat(),
         resolved_at=conflict.resolved_at.isoformat() if conflict.resolved_at else None,
         resolution_note=conflict.resolution_note,
-        category=cause_of(conflict.reason_code, conflict.reason, classifier)[0].value,
-        category_source=cause_of(conflict.reason_code, conflict.reason, classifier)[1],
+        category=category,
+        category_source=category_source,
     )
 
 
@@ -365,10 +372,7 @@ class Query:
         ctx = info.context
         ctx.require_role("OPERATOR")
         wanted = ConflictStatus(status) if status else None
-        return [
-            _conflict_to_gql(c, ctx.container.cause_classifier)
-            for c in ctx.container.conflicts.list(wanted)
-        ]
+        return [_conflict_to_gql(c) for c in ctx.container.conflicts.list(wanted)]
 
     @strawberry.field
     def order_conflict(
@@ -377,9 +381,7 @@ class Query:
         ctx = info.context
         ctx.require_role("OPERATOR")
         try:
-            return _conflict_to_gql(
-                ctx.container.conflicts.get(conflict_id), ctx.container.cause_classifier
-            )
+            return _conflict_to_gql(ctx.container.conflicts.get(conflict_id))
         except ConflictNotFound:
             return None
 

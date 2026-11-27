@@ -88,3 +88,8 @@ class OrderConflict:
     opened_at: datetime
     sla_due_at: datetime
     resolved_at: datetime | None
+    # Computed once in ConflictService.record_failure, not on every read. None only for
+    # rows recorded before this field existed — the read path falls back to the rule-only
+    # classifier for those, never a live LLM call for old history.
+    category: str | None = None
+    category_source: str | None = None

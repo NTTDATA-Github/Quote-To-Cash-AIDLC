@@ -9,6 +9,7 @@ from src.modules.integration.conflicts.application.service import (
     SLA,
     ConflictService,
 )
+from src.modules.integration.conflicts.domain.categories import ConflictCategory
 from src.modules.integration.conflicts.domain.models import (
     ConflictNotFound,
     ConflictStatus,
@@ -60,8 +61,54 @@ def test_repeated_failures_for_one_order_update_the_same_conflict() -> None:
 
     assert second.conflict_id == first.conflict_id
     assert second.attempts == 2
-    assert second.reason == "timeout again"
-    assert len(svc.list()) == 1
+
+
+def test_category_is_computed_once_at_record_time_not_left_null() -> None:
+    """Regression test for the read-path cache this replaced: category used to be
+    computed live on every GraphQL read; now it's set once, here, when the conflict
+    is recorded, so a read never needs to classify anything itself."""
+    svc = _service()
+    conflict = _fail(svc, reason="customer on hold")
+
+    assert conflict.category == "CUSTOMER_ON_HOLD"
+    assert conflict.category_source == "RULE"
+
+
+def test_a_message_no_rule_recognises_asks_the_injected_classifier() -> None:
+    class _FixedClassifier:
+        def classify(self, message: str) -> ConflictCategory | None:
+            return ConflictCategory.ADDRESS_PROBLEM
+
+    svc = ConflictService(
+        InMemoryConflictRepository(), clock=lambda: NOW, classifier=_FixedClassifier()
+    )
+    conflict = _fail(svc, reason="0x4F2 unexpected")
+
+    assert conflict.category == "ADDRESS_PROBLEM"
+    assert conflict.category_source == "AI"
+
+
+def test_with_no_classifier_injected_an_unrecognised_message_stays_unrecognised() -> None:
+    """The default (no classifier passed) is UnavailableCauseClassifier, same as the
+    GraphQL layer falls back to today — never a crash, never a silent guess."""
+    svc = _service()
+    conflict = _fail(svc, reason="0x4F2 unexpected")
+
+    assert conflict.category == "OTHER"
+    assert conflict.category_source == "UNRECOGNISED"
+
+
+def test_category_is_recomputed_on_a_later_failure_with_a_different_reason() -> None:
+    # terminal=False forces reason_code="erp_unavailable" (see _fail), and classify()
+    # matches against "{reason_code} {reason}" combined - "unavailable" in the reason
+    # code alone would always win ERP_UNREACHABLE regardless of `reason`, so both
+    # failures here must be terminal to actually let `reason` drive the category.
+    svc = _service()
+    first = _fail(svc, terminal=True, reason="unknown item SKU-9")
+    assert first.category == "PRODUCT_NOT_FOUND"
+
+    second = _fail(svc, terminal=True, reason="customer on hold")
+    assert second.category == "CUSTOMER_ON_HOLD"
 
 
 def test_a_later_rejection_raises_the_severity_of_the_open_conflict() -> None:

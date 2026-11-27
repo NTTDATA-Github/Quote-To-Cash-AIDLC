@@ -40,6 +40,8 @@ order_conflicts_table = Table(
     Column("opened_at", DateTime(timezone=True), nullable=False),
     Column("sla_due_at", DateTime(timezone=True), nullable=False),
     Column("resolved_at", DateTime(timezone=True)),
+    Column("category", String),
+    Column("category_source", String),
 )
 
 
@@ -59,6 +61,8 @@ def _to_model(row: Row) -> OrderConflict:
         opened_at=row.opened_at,
         sla_due_at=row.sla_due_at,
         resolved_at=row.resolved_at,
+        category=row.category,
+        category_source=row.category_source,
     )
 
 
@@ -78,6 +82,8 @@ def _values(c: OrderConflict) -> dict[str, object]:
         "opened_at": c.opened_at,
         "sla_due_at": c.sla_due_at,
         "resolved_at": c.resolved_at,
+        "category": c.category,
+        "category_source": c.category_source,
     }
 
 

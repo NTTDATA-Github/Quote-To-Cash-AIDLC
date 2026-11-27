@@ -22,12 +22,14 @@ from ..domain.models import (
     Severity,
     SeverityRule,
 )
+from ..infrastructure.llm_classifier import UnavailableCauseClassifier
 from ..infrastructure.memory import InMemorySeverityRules
+from .causes import cause_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from .ports import ConflictRepository, SeverityRuleRepository
+    from .ports import CauseClassifier, ConflictRepository, SeverityRuleRepository
 
 # How long an operator has to look at a conflict before it counts as overdue.
 SLA = timedelta(hours=8)
@@ -42,10 +44,12 @@ class ConflictService:
         repo: ConflictRepository,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         rules: SeverityRuleRepository | None = None,
+        classifier: CauseClassifier | None = None,
     ) -> None:
         self._repo = repo
         self._clock = clock
         self._rules = rules if rules is not None else InMemorySeverityRules()
+        self._classifier = classifier if classifier is not None else UnavailableCauseClassifier()
 
     def severity_rules(self) -> list[SeverityRule]:
         return self._rules.list()
@@ -79,6 +83,11 @@ class ConflictService:
         severity = (
             (rule.when_rejected if terminal else rule.when_retrying) if rule else Severity.HIGH
         )
+        # Computed once, here, not on every later read (see ADR history / 0022's migration
+        # note): a rule-recognised message never touches the classifier at all; only a
+        # message the rule puts in OTHER asks it, and only once per failure, not once per
+        # GraphQL read.
+        category, category_source = cause_of(reason_code, reason, self._classifier)
         existing = self._repo.find_open_for_order(order_id)
         if existing is None:
             now = self._clock()
@@ -97,6 +106,8 @@ class ConflictService:
                 opened_at=now,
                 sla_due_at=now + SLA,
                 resolved_at=None,
+                category=category.value,
+                category_source=category_source,
             )
             try:
                 self._repo.add(conflict)
@@ -109,6 +120,8 @@ class ConflictService:
         existing.reason_code = reason_code
         existing.reason = reason
         existing.severity = severity
+        existing.category = category.value
+        existing.category_source = category_source
         existing.attempts += 1
         self._repo.update(existing)
         return existing

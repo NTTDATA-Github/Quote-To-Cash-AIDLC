@@ -1,12 +1,13 @@
 """AI summaries of order conflicts, from an LLM client, or "unavailable" when none is set up.
 
 The model is given the conflict's facts and nothing else: no customer records, no secrets, no
-ERP payloads. Answers are cached per conflict and attempt count, so reopening a conflict does
-not call the model again.
+ERP payloads. Answers are cached per rendered fact set, so reopening a conflict with nothing
+changed does not call the model again.
 """
 
 from __future__ import annotations
 
+import hashlib
 from typing import TYPE_CHECKING
 
 from ..domain.models import ConflictExplanationUnavailable
@@ -52,16 +53,18 @@ class LlmConflictExplainer:
         # Built on first use, so a missing key only affects the summary, never startup.
         self._client_factory = client_factory
         self._client: LlmClient | None = None
-        self._cache: dict[tuple[str, int, str], str] = {}
+        self._cache: dict[str, str] = {}
 
     def explain(self, conflict: OrderConflict, reseller_name: str) -> str:
-        key = (conflict.conflict_id, conflict.attempts, conflict.reason)
+        # Keyed on the rendered facts themselves, not a hand-picked tuple of fields - a
+        # tuple of (conflict_id, attempts, reason) missed a changed reseller name or
+        # severity, silently serving a summary that no longer matched what's shown.
+        facts = _facts(conflict, reseller_name)
+        key = hashlib.sha256(facts.encode()).hexdigest()
         if key not in self._cache:
             if self._client is None:
                 self._client = self._client_factory()
-            self._cache[key] = self._client.ask(
-                SYSTEM_PROMPT, _facts(conflict, reseller_name)
-            ).strip()
+            self._cache[key] = self._client.ask(SYSTEM_PROMPT, facts).strip()
         return self._cache[key]
 
 
