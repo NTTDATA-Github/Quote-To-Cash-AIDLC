@@ -141,7 +141,6 @@ up() {
 Local demo is up.
   AdminOps                       http://127.0.0.1:5173
   API liveness                   http://127.0.0.1:8000/livez
-  Reseller GraphQL               http://127.0.0.1:8000/graphql/reseller
   Operator GraphQL               http://127.0.0.1:8000/graphql/operator
   Keycloak                       http://localhost:8080  (admin / admin)
   Odoo                           http://localhost:8069  (admin / admin)
