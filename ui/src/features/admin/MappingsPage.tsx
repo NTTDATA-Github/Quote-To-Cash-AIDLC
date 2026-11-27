@@ -1,8 +1,10 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Plug, Sparkles } from "lucide-react";
+import { Download, Plug, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
+import { EditableCell } from "../../components/EditableCell";
+import { IconButton } from "../../components/IconButton";
 import { InfoTag } from "../../components/InfoTag";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge, type Role } from "../../components/StatusBadge";
@@ -53,6 +55,12 @@ function confidenceTier(score: number): { label: string; role: Role } {
   if (score >= 95) return { label: "High confidence", role: "success" };
   if (score >= 80) return { label: "Needs review", role: "warning" };
   return { label: "Low confidence", role: "danger" };
+}
+
+/** "orders" and "orders.json" both download as orders.json. */
+function sampleFileName(label: string): string {
+  const base = label.trim().replace(/[^\w.-]+/g, "_").replace(/\.json$/i, "") || "sample";
+  return `${base}.json`;
 }
 
 function downloadBlob(filename: string, text: string, mime: string): void {
@@ -180,6 +188,7 @@ export function MappingsPage() {
   // seeds it; after that, edits here win over a later refetch (don't clobber a row the
   // operator just changed).
   const [liveFields, setLiveFields] = useState<CanonicalField[] | null>(null);
+  const [selectedLiveRow, setSelectedLiveRow] = useState<number | null>(null);
   useEffect(() => {
     if (liveOrderSchema && liveFields === null) setLiveFields(parseCanonicalCsv(liveOrderSchema));
   }, [liveOrderSchema, liveFields]);
@@ -460,29 +469,31 @@ export function MappingsPage() {
                   </thead>
                   <tbody>
                     {liveFields.map((f, i) => (
-                      <tr key={i}>
+                      <tr
+                        key={i}
+                        className={selectedLiveRow === i ? "is-selected" : undefined}
+                        onClick={() => setSelectedLiveRow(i)}
+                        aria-selected={selectedLiveRow === i}
+                      >
                         <td>
-                          <input
-                            className="input"
+                          <EditableCell
+                            label="Field name"
+                            mono
                             value={f.field}
-                            onChange={(e) => updateLiveField(i, { field: e.target.value })}
+                            placeholder="Name this field"
+                            onSave={(next) => updateLiveField(i, { field: next })}
                           />
                         </td>
                         <td>
-                          <input
-                            className="input"
+                          <EditableCell
+                            label="Description"
                             value={f.description}
-                            onChange={(e) => updateLiveField(i, { description: e.target.value })}
+                            placeholder="Add a description"
+                            onSave={(next) => updateLiveField(i, { description: next })}
                           />
                         </td>
-                        <td>
-                          <button
-                            className="erp-btn erp-btn--ghost erp-btn--sm"
-                            type="button"
-                            onClick={() => setLiveFields((prev) => (prev ?? []).filter((_, j) => j !== i))}
-                          >
-                            Remove
-                          </button>
+                        <td className="actions">
+                          <IconButton icon={Trash2} label="Remove field" tone="danger" onClick={() => { setSelectedLiveRow(null); setLiveFields((prev) => (prev ?? []).filter((_, j) => j !== i)); }} />
                         </td>
                       </tr>
                     ))}
@@ -496,7 +507,7 @@ export function MappingsPage() {
               style={{ marginTop: "var(--space-2)" }}
               onClick={() => setLiveFields((prev) => [...(prev ?? []), { field: "", description: "" }])}
             >
-              Add field
+              <Plus size={14} aria-hidden="true" /> Add field
             </button>
           </div>
         )}
@@ -655,13 +666,7 @@ export function MappingsPage() {
                       onChange={(e) => setLiveRequests(liveRequests.map((x, j) => (j === i ? { ...x, path: e.target.value } : x)))}
                     />
                     {liveRequests.length > 1 && (
-                      <button
-                        className="erp-btn erp-btn--ghost erp-btn--sm"
-                        type="button"
-                        onClick={() => setLiveRequests(liveRequests.filter((_, j) => j !== i))}
-                      >
-                        Remove
-                      </button>
+                      <IconButton icon={Trash2} label="Remove request" tone="danger" onClick={() => setLiveRequests(liveRequests.filter((_, j) => j !== i))} />
                     )}
                   </div>
                 </div>
@@ -671,7 +676,7 @@ export function MappingsPage() {
                 type="button"
                 onClick={() => setLiveRequests([...liveRequests, { label: "", method: "GET", path: "" }])}
               >
-                Add another
+                <Plus size={14} aria-hidden="true" /> Add another
               </button>
             </div>
 
@@ -689,7 +694,14 @@ export function MappingsPage() {
               <div className="stack">
                 {probePreview.map((s) => (
                   <div key={s.label} className={`callout ${s.error ? "callout--danger" : "callout--info"}`}>
-                    <b>{s.label}</b>: {s.error ?? `${s.text?.length ?? 0} characters received`}
+                    <span>
+                      <b>{s.label}</b>: {s.error ?? `${(s.text?.length ?? 0).toLocaleString()} characters received`}
+                    </span>
+                    {!s.error && s.text && (
+                      <button className="erp-btn erp-btn--secondary erp-btn--sm" type="button" onClick={() => downloadBlob(sampleFileName(s.label), s.text ?? "", "application/json")}>
+                        <Download size={14} aria-hidden="true" /> Download
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

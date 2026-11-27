@@ -16,18 +16,22 @@ RUN apt-get update \
 
 # Same corporate_ca convention as Dockerfile.api — no-op unless the build passes
 # --secret id=corporate_ca,src=<path>.
+# Pinned: the agent's behaviour depends on the CLI's flags and env vars, so an unpinned
+# `npm install -g` would let an upstream release change what the agent does.
+ARG CLAUDE_CODE_VERSION=2.1.310
 RUN --mount=type=secret,id=corporate_ca,target=/usr/local/share/ca-certificates/corporate-ca.crt \
     if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then \
       update-ca-certificates && \
       export PIP_CERT=/etc/ssl/certs/ca-certificates.crt && \
       npm config set cafile /etc/ssl/certs/ca-certificates.crt; \
     fi && \
-    npm install -g @anthropic-ai/claude-code
+    npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
-COPY erp-agent-service/requirements.txt ./
+# Hash-locked (erp-agent-service/requirements.lock, from requirements.txt — see scripts/lock.sh).
+COPY erp-agent-service/requirements.lock ./
 RUN --mount=type=secret,id=corporate_ca,target=/usr/local/share/ca-certificates/corporate-ca.crt \
     if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then export PIP_CERT=/etc/ssl/certs/ca-certificates.crt; fi && \
-    pip install -r requirements.txt
+    pip install --require-hashes -r requirements.lock
 
 COPY erp-agent-service/service ./service
 

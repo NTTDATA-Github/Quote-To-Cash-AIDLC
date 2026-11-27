@@ -2,8 +2,17 @@
 
 | | |
 |---|---|
-| Status | Accepted |
+| Status | Superseded — the reseller schema was removed; see note below |
 | Affects | `src/api/graphql` |
+
+## Update (operator console: generic connections, webhook auth, operator-only API)
+`src/api/graphql/reseller` (schema + types) was removed; `/graphql/operator` is now the
+only GraphQL schema the API serves. The two-schemas-by-audience split this ADR decided
+is no longer the live architecture — resellers are served through webhooks, not
+GraphQL. The structural guarantee below (no reseller-facing code path can return ERP
+identity) still holds, just by having no reseller schema at all rather than by having a
+second, deliberately narrower one. Kept for history; do not treat "Accepted" below as
+current.
 
 ## In one sentence
 Resellers and operators get two entirely separate GraphQL schemas, not one schema with

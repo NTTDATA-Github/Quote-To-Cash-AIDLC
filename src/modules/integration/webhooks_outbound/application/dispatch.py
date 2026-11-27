@@ -20,6 +20,7 @@ import time
 from typing import TYPE_CHECKING, Protocol
 
 from src.modules.integration.webhooks_inbound.domain.signature import compute_signature
+from src.shared.erp_auth import AuthConfig, apply_auth
 from src.shared.types import TenantId, generate_id
 
 from ..domain.models import DISPATCHABLE_EVENT_TYPES, DeliveryStatus, WebhookDelivery
@@ -112,9 +113,17 @@ class WebhookDispatchService:
         signature = (
             f"t={timestamp},v1={compute_signature(secret, f'{timestamp}.'.encode() + raw_body)}"
         )
+        # The credential the receiver asked for (if any) goes alongside the signature.
+        auth_secret = (
+            self._secrets.get_secret(endpoint.auth_secret_ref) if endpoint.auth_secret_ref else None
+        )
+        applied = apply_auth(
+            AuthConfig(auth_type=endpoint.auth_type, params=dict(endpoint.auth_params)),
+            auth_secret,
+        )
         result = self._sender.send(
             endpoint.url,
-            {"Content-Type": "application/json", "X-Signature": signature},
+            {"Content-Type": "application/json", "X-Signature": signature, **applied.headers},
             raw_body,
         )
         delivery.attempts += 1

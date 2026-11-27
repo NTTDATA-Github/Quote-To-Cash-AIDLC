@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import secrets as secret_gen
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
+from src.shared.erp_auth import AuthType
 from src.shared.types import TenantId, WebhookEndpointId, generate_id
 
 from ..domain.errors import WebhookEndpointNotFound
@@ -26,12 +28,39 @@ class WebhookEndpointService:
         self._secrets = secrets
 
     def register(
-        self, *, tenant_id: TenantId, name: str, url: str, event_types: frozenset[str] | None
+        self,
+        *,
+        tenant_id: TenantId,
+        name: str,
+        url: str,
+        event_types: frozenset[str] | None,
+        auth_type: AuthType = AuthType.NONE,
+        auth_params: dict[str, str] | None = None,
+        auth_secret: str | None = None,
     ) -> tuple[WebhookEndpoint, str]:
+        """Returns the endpoint and its signing secret (shown once). `auth_secret` is the
+        credential we send to the receiver; it is stored separately and never returned."""
+        # Everything is checked before anything is stored, so a rejected request leaves no
+        # secret behind.
+        if not name.strip():
+            raise ValueError("name must not be blank")
+        parsed = urlparse(url.strip())
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ValueError(f"url must be a full http(s) URL, got {url!r}")
+        params = dict(auth_params or {})
+        if auth_type is not AuthType.NONE and not auth_secret:
+            raise ValueError(f"{auth_type.value} needs a secret")
+        if auth_type is AuthType.BASIC and not params.get("username", "").strip():
+            raise ValueError("basic authentication needs a username")
+
         endpoint_id = WebhookEndpointId(generate_id("whep"))
         secret_ref = f"webhook-endpoint/{endpoint_id}"
         raw_secret = f"whsec_{secret_gen.token_hex(20)}"
         self._secrets.put_secret(secret_ref, raw_secret)
+        auth_secret_ref = None
+        if auth_type is not AuthType.NONE:
+            auth_secret_ref = f"webhook-endpoint-auth/{endpoint_id}"
+            self._secrets.put_secret(auth_secret_ref, auth_secret or "")
 
         endpoint = WebhookEndpoint(
             endpoint_id=endpoint_id,
@@ -41,6 +70,9 @@ class WebhookEndpointService:
             secret_ref=secret_ref,
             event_types=event_types,
             is_active=True,
+            auth_type=auth_type,
+            auth_params=params,
+            auth_secret_ref=auth_secret_ref,
         )
         self._repository.add(endpoint)
         return endpoint, raw_secret

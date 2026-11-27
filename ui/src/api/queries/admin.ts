@@ -4,6 +4,7 @@ export interface Connection {
   instanceLabel: string;
   baseUrl: string;
   credentials: Record<string, string>;
+  authType: string;
   status: string;
   secretRef: string;
   hasWebhookSecret: boolean;
@@ -75,9 +76,33 @@ export interface OperatorOrder {
   parties: { endCustomerName: string; shipTo: string; subsidiaryId: string; quoteId: string };
 }
 
+// One field the add/edit connection form asks for. `target` says where the value goes:
+// LABEL, BASE_URL, CREDENTIAL (a non-secret parameter) or SECRET (stored, never returned).
+export interface ErpField {
+  key: string;
+  label: string;
+  hint: string;
+  target: "LABEL" | "BASE_URL" | "CREDENTIAL" | "SECRET";
+  secret: boolean;
+}
+
+// An ERP type the operator can connect without a developer. The form is built from this.
+export interface ErpType {
+  code: string;
+  name: string;
+  authType: string;
+  fields: ErpField[];
+}
+
+export const ERP_TYPES_QUERY = /* GraphQL */ `
+  query ErpTypes {
+    erpTypes { code name authType fields { key label hint target secret } }
+  }
+`;
+
 export const CONNECTIONS_QUERY = /* GraphQL */ `
   query Connections {
-    connections { connectionId erpType instanceLabel baseUrl credentials status secretRef hasWebhookSecret hasAdapter mappingStatus }
+    connections { connectionId erpType instanceLabel baseUrl credentials authType status secretRef hasWebhookSecret hasAdapter mappingStatus }
   }
 `;
 
@@ -154,6 +179,154 @@ export const REGISTER_CONNECTION_MUTATION = /* GraphQL */ `
       hasAdapter
       mappingStatus
     }
+  }
+`;
+
+export const UPDATE_CONNECTION_MUTATION = /* GraphQL */ `
+  mutation UpdateConnection(
+    $connectionId: String!
+    $instanceLabel: String!
+    $baseUrl: String!
+    $credentials: JSON!
+    $secret: String
+  ) {
+    updateConnection(
+      connectionId: $connectionId
+      instanceLabel: $instanceLabel
+      baseUrl: $baseUrl
+      credentials: $credentials
+      secret: $secret
+    ) { connectionId instanceLabel baseUrl status }
+  }
+`;
+
+// Adds a webhook URL for a reseller. `signingSecret` comes back once, so the operator
+// must copy it to the reseller straight away.
+export const REGISTER_RESELLER_WEBHOOK_MUTATION = /* GraphQL */ `
+  mutation RegisterResellerWebhook(
+    $tenantId: String!
+    $name: String!
+    $url: String!
+    $authType: String!
+    $authParams: JSON
+    $authSecret: String
+  ) {
+    registerResellerWebhook(
+      tenantId: $tenantId
+      name: $name
+      url: $url
+      authType: $authType
+      authParams: $authParams
+      authSecret: $authSecret
+    ) {
+      endpoint { endpointId name url isActive authType }
+      signingSecret
+    }
+  }
+`;
+
+// A delivery that failed or was rejected, waiting for an operator. View-only for now.
+// The kind of problem behind a conflict. Computed by the API from the ERP's message.
+export type ConflictCategory =
+  | "CUSTOMER_ON_HOLD"
+  | "PRODUCT_NOT_FOUND"
+  | "PRICE_MISMATCH"
+  | "ADDRESS_PROBLEM"
+  | "DUPLICATE_ORDER"
+  | "ERP_UNREACHABLE"
+  | "OTHER";
+
+export interface OrderConflict {
+  conflictId: string;
+  tenantId: string;
+  orderId: string;
+  reasonCode: string;
+  reason: string;
+  severity: "HIGH" | "MEDIUM" | "LOW";
+  status: "OPEN" | "IN_REVIEW" | "RESOLVED" | "DISMISSED";
+  attempts: number;
+  openedAt: string;
+  slaDueAt: string;
+  resolvedAt: string | null;
+  resolutionNote: string;
+  category: ConflictCategory;
+  categorySource: "RULE" | "AI" | "UNRECOGNISED";
+}
+
+// An AI summary of one conflict. `text` is set when one was written; otherwise `unavailable`
+// says why not.
+export interface ConflictExplanation {
+  text: string | null;
+  unavailable: string | null;
+}
+
+// How urgent one cause is, by whether the ERP refused the order or delivery is retrying.
+export interface SeverityRule {
+  category: ConflictCategory;
+  label: string;
+  whenRejected: "HIGH" | "MEDIUM" | "LOW";
+  whenRetrying: "HIGH" | "MEDIUM" | "LOW";
+}
+
+export const SEVERITY_RULES_QUERY = /* GraphQL */ `
+  query SeverityRules {
+    conflictSeverityRules { category label whenRejected whenRetrying }
+  }
+`;
+
+export const SET_SEVERITY_RULE_MUTATION = /* GraphQL */ `
+  mutation SetSeverityRule($category: String!, $whenRejected: String!, $whenRetrying: String!) {
+    setConflictSeverityRule(category: $category, whenRejected: $whenRejected, whenRetrying: $whenRetrying) {
+      category label whenRejected whenRetrying
+    }
+  }
+`;
+
+export const CONFLICT_EXPLANATION_QUERY = /* GraphQL */ `
+  query ConflictExplanation($conflictId: String!) {
+    conflictExplanation(conflictId: $conflictId) { text unavailable }
+  }
+`;
+
+export const ORDER_CONFLICTS_QUERY = /* GraphQL */ `
+  query OrderConflicts($status: String) {
+    orderConflicts(status: $status) {
+      conflictId tenantId orderId reasonCode reason severity status attempts
+      openedAt slaDueAt resolvedAt resolutionNote category categorySource
+    }
+  }
+`;
+
+// The webhook URLs of one reseller, paused ones included, with the auth type (never the secret).
+export interface WebhookEndpoint {
+  endpointId: string;
+  name: string;
+  url: string;
+  isActive: boolean;
+  authType: string;
+}
+
+export const WEBHOOK_ENDPOINTS_QUERY = /* GraphQL */ `
+  query WebhookEndpoints($tenantId: String!) {
+    webhookEndpoints(tenantId: $tenantId) { endpointId name url isActive authType }
+  }
+`;
+
+export const PAUSE_WEBHOOK_ENDPOINT_MUTATION = /* GraphQL */ `
+  mutation PauseWebhookEndpoint($tenantId: String!, $endpointId: String!) {
+    pauseWebhookEndpoint(tenantId: $tenantId, endpointId: $endpointId) { endpointId isActive }
+  }
+`;
+
+export const RESUME_WEBHOOK_ENDPOINT_MUTATION = /* GraphQL */ `
+  mutation ResumeWebhookEndpoint($tenantId: String!, $endpointId: String!) {
+    resumeWebhookEndpoint(tenantId: $tenantId, endpointId: $endpointId) { endpointId isActive }
+  }
+`;
+
+export const CANCEL_ORDER_MUTATION = /* GraphQL */ `
+  mutation CancelOrder($orderId: String!, $reason: String!) {
+    cancelOrder(orderId: $orderId, reason: $reason)
   }
 `;
 

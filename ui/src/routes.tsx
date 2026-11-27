@@ -13,6 +13,7 @@ import { OrderDetailPage as OperatorOrderDetailPage } from "./features/admin/Ord
 import { ConflictResolutionPage } from "./features/admin/ConflictResolutionPage";
 import { MappingsPage } from "./features/admin/MappingsPage";
 import { OrderEventsPage } from "./features/events/OrderEventsPage";
+import { RouteErrorScreen } from "./components/RouteErrorScreen";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -35,7 +36,7 @@ function OrderEventsRedirect() {
 }
 
 export const router = createBrowserRouter([
-  { path: "/login", element: <LoginPage /> },
+  { path: "/login", element: <LoginPage />, errorElement: <RouteErrorScreen /> },
   {
     path: "/",
     element: (
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
         <AppShell />
       </RequireAuth>
     ),
+    errorElement: <RouteErrorScreen />,
     children: [
       { index: true, element: <HomeRedirect /> },
       { path: "admin/overview", element: <OverviewPage /> },

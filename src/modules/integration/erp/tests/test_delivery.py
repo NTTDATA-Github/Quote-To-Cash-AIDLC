@@ -101,3 +101,65 @@ def test_transient_failure_marks_retrying_and_raises() -> None:
     with pytest.raises(DeliveryRetry):
         _handler(TransientAdapter(), cmds).handle(_ready_event())
     assert cmds.calls[0][0] == "mark_retrying"
+
+
+class RecordingSink:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, Any]] = []
+
+    def record(self, order_id: OrderId, *, reason_code: str, reason: str, terminal: bool) -> None:
+        self.events.append(("record", (str(order_id), reason_code, terminal)))
+
+    def cleared(self, order_id: OrderId) -> None:
+        self.events.append(("cleared", str(order_id)))
+
+
+def _handler_with_sink(
+    adapter: Any, cmds: RecordingCommands, sink: RecordingSink
+) -> DeliveryHandler:
+    return DeliveryHandler(
+        connections=FakeConnections(),
+        orders_read=FakeOrders(),
+        orders_cmd=cmds,
+        adapter_for=lambda _erp_type: adapter,
+        failures=sink,
+    )
+
+
+def test_rejection_is_reported_to_the_failure_sink_as_terminal() -> None:
+    class TerminalAdapter:
+        def submit(self, target: ErpTarget, payload: dict[str, Any]) -> SubmissionResult:
+            return SubmissionResult(success=False, error="customer on hold", terminal=True)
+
+        def fetch_status(self, target: ErpTarget, erp_order_id: str) -> dict[str, str] | None:
+            return None
+
+        def cancel(self, target: ErpTarget, erp_order_id: str) -> SubmissionResult:
+            return SubmissionResult(success=False, terminal=True)
+
+    sink = RecordingSink()
+    _handler_with_sink(TerminalAdapter(), RecordingCommands(), sink).handle(_ready_event())
+    assert sink.events == [("record", ("ord_1", "erp_rejected", True))]
+
+
+def test_transient_failure_is_reported_as_retryable_before_the_retry() -> None:
+    class TransientAdapter:
+        def submit(self, target: ErpTarget, payload: dict[str, Any]) -> SubmissionResult:
+            return SubmissionResult(success=False, error="timeout", terminal=False)
+
+        def fetch_status(self, target: ErpTarget, erp_order_id: str) -> dict[str, str] | None:
+            return None
+
+        def cancel(self, target: ErpTarget, erp_order_id: str) -> SubmissionResult:
+            return SubmissionResult(success=False)
+
+    sink = RecordingSink()
+    with pytest.raises(DeliveryRetry):
+        _handler_with_sink(TransientAdapter(), RecordingCommands(), sink).handle(_ready_event())
+    assert sink.events == [("record", ("ord_1", "erp_unavailable", False))]
+
+
+def test_successful_delivery_clears_the_order_in_the_failure_sink() -> None:
+    sink = RecordingSink()
+    _handler_with_sink(StubErpAdapter(), RecordingCommands(), sink).handle(_ready_event())
+    assert sink.events == [("cleared", "ord_1")]

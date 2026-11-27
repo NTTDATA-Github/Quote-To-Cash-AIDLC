@@ -15,7 +15,7 @@ the coding agent. It needs no cloud account. The README has the URLs and the sig
 ```bash
 python -m venv .venv
 . .venv/Scripts/activate          # source .venv/bin/activate on macOS/Linux
-pip install -e ".[dev]"
+pip install -r requirements-dev.lock && pip install --no-deps -e .
 cd ui && npm install && cd ..
 bash scripts/local.sh up
 ```

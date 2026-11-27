@@ -1,4 +1,4 @@
-"""FastAPI composition root: mounts GraphQL (reseller + operator) + HTTP (webhooks, health).
+"""FastAPI composition root: mounts GraphQL (operator) + HTTP (webhooks, health).
 
 Security headers (SECURITY-04) are applied to all responses. Tenant/roles come from
 `container.identity` — the header stub in the memory profile and whenever Keycloak/Entra
@@ -17,7 +17,6 @@ from strawberry.fastapi import GraphQLRouter
 
 from src.api.graphql.context import GraphQLContext
 from src.api.graphql.operator.schema import build_operator_schema
-from src.api.graphql.reseller.schema import build_reseller_schema
 from src.api.http import health, webhooks
 from src.composition import build_container
 from src.shared.config import get_settings
@@ -59,10 +58,6 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type"],
     )
 
-    app.include_router(
-        GraphQLRouter(build_reseller_schema(), context_getter=_build_context),
-        prefix="/graphql/reseller",
-    )
     app.include_router(
         GraphQLRouter(build_operator_schema(), context_getter=_build_context),
         prefix="/graphql/operator",

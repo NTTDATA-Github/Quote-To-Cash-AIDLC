@@ -91,7 +91,7 @@ approves a mapping (`AGENT_SERVICE_URL`); nothing reseller-facing ever reaches i
 ## Run it locally
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.lock   # regenerate with scripts/lock.sh after editing requirements.txt
 cp .env.example .env   # fill in TARGET_REPO_URL and GITHUB_TOKEN
 uvicorn service.app:app --reload --port 8002   # terminal 1
 python -m service.worker                         # terminal 2

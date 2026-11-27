@@ -1,0 +1,70 @@
+# Backend pipeline: one Python-checks run shared by the api and worker image builds.
+# Runs on PRs to main that touch the backend code, and on pushes to main.
+name: Backend
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "migrations/**"
+      - "alembic.ini"
+      - "pyproject.toml"
+      - "pytest.ini"
+      - "requirements.lock"
+      - "requirements-dev.lock"
+      - ".dockerignore"
+      - "Dockerfile.api"
+      - "Dockerfile.worker"
+      - ".github/workflows/backend.yml"
+      - ".github/workflows/_python-checks.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "migrations/**"
+      - "alembic.ini"
+      - "pyproject.toml"
+      - "pytest.ini"
+      - "requirements.lock"
+      - "requirements-dev.lock"
+      - ".dockerignore"
+      - "Dockerfile.api"
+      - "Dockerfile.worker"
+      - ".github/workflows/backend.yml"
+      - ".github/workflows/_python-checks.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Python checks
+    uses: ./.github/workflows/_python-checks.yml
+
+  api-image:
+    name: Build api image
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build only, no push. Deploys use scripts/deploy_azure.sh.
+      - name: docker build Dockerfile.api
+        run: docker build -f Dockerfile.api -t o2c/api:ci .
+
+  worker-image:
+    name: Build worker image
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Build only, no push. Deploys use scripts/deploy_azure.sh.
+      - name: docker build Dockerfile.worker
+        run: docker build -f Dockerfile.worker -t o2c/worker:ci .

@@ -17,21 +17,31 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install deps first (better layer caching), then the source.
-COPY pyproject.toml README.md ./
-COPY src ./src
-COPY migrations ./migrations
-COPY alembic.ini ./
+# Install the hash-locked dependencies first (requirements.lock, generated from
+# pyproject.toml — see scripts/lock.sh), so this layer caches across source changes.
 # --mount=type=secret is a no-op unless the build passes
 # --secret id=corporate_ca,src=<path>: BuildKit then mounts an EMPTY file at that path,
 # so this is always safe in CI. It exists only to let a build behind a TLS-intercepting
 # corporate proxy (see .gitignore's .build-ca/) trust that proxy's root CA before
 # reaching PyPI — never required, never baked into the image.
+COPY requirements.lock ./
 RUN --mount=type=secret,id=corporate_ca,target=/usr/local/share/ca-certificates/corporate-ca.crt \
     if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then \
       update-ca-certificates && export PIP_CERT=/etc/ssl/certs/ca-certificates.crt; \
     fi && \
-    pip install .
+    pip install --require-hashes -r requirements.lock
+
+# Then the project itself, with no dependency resolution (the lock already holds them).
+COPY pyproject.toml README.md ./
+COPY src ./src
+COPY migrations ./migrations
+COPY alembic.ini ./
+# Build tools for the project itself come from PyPI, so this step needs the CA too.
+RUN --mount=type=secret,id=corporate_ca,target=/usr/local/share/ca-certificates/corporate-ca.crt \
+    if [ -s /usr/local/share/ca-certificates/corporate-ca.crt ]; then \
+      update-ca-certificates && export PIP_CERT=/etc/ssl/certs/ca-certificates.crt; \
+    fi && \
+    pip install --no-deps .
 
 # Run as a non-root user.
 RUN useradd --create-home --uid 10001 appuser

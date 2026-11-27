@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from "react";
-import { Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import { DataTable, type Column } from "../../components/DataTable";
+import { Drawer } from "../../components/Drawer";
 import { InfoTag } from "../../components/InfoTag";
 import { PageHeader } from "../../components/PageHeader";
 import {
@@ -164,14 +165,9 @@ export function SubsidiariesPage() {
       <PageHeader
         title="Subsidiaries"
         subtitle="Each row is one distributor company. Add the login on ERP connections first, then select it in ERP connection."
-        actions={
-          <button className="erp-btn erp-btn--primary" type="button" onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "Cancel" : "Add subsidiary"}
-          </button>
-        }
       />
-      {showForm && (
-        <form className="panel stack" onSubmit={handleSubmit}>
+      <Drawer open={showForm} onClose={() => setShowForm(false)} title="Add subsidiary">
+        <form className="stack" onSubmit={handleSubmit}>
           <div className="grid2">
             <div className="field">
               <label htmlFor="sub-name">Name <InfoTag text="What you will call this distributor company in AdminOps." /></label>
@@ -193,7 +189,7 @@ export function SubsidiariesPage() {
             </button>
           </div>
         </form>
-      )}
+      </Drawer>
       <div className="toolbar">
         <div className="search-input">
           <Search size={15} strokeWidth={2} className="search-input__icon" />
@@ -206,6 +202,9 @@ export function SubsidiariesPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
+        <button className="erp-btn erp-btn--primary" type="button" style={{ marginLeft: "auto" }} onClick={() => setShowForm(true)}>
+          <Plus size={14} aria-hidden="true" /> Add subsidiary
+        </button>
       </div>
       {error && <div className="callout callout--danger">Could not load subsidiaries: {error.message}</div>}
       <DataTable columns={columns} rows={rows} rowKey={(c) => c.subsidiaryId} isLoading={isLoading} emptyMessage="No subsidiaries match this filter" pageSize={10} />

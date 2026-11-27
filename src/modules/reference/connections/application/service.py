@@ -16,6 +16,7 @@ from ..domain.events import (
     CONNECTION_REGISTERED,
     CONNECTION_RENAMED,
     CONNECTION_RESUMED,
+    CONNECTION_UPDATED,
 )
 from ..domain.models import ConnectionStatus, ErpConnection, normalize_erp_type
 
@@ -59,13 +60,9 @@ class ConnectionService:
         Validates the free-typed fields a typo most often lands in: a connection with a
         blank label, a blank erp_type, or a base_url that isn't actually a URL would
         otherwise sit silently until the first probe or delivery fails against it."""
-        if not instance_label.strip():
-            raise ValueError("instance_label must not be blank")
+        _check_label_and_url(instance_label, base_url)
         if not normalize_erp_type(erp_type):
             raise ValueError("erp_type must not be blank")
-        parsed = urlparse(base_url.strip())
-        if parsed.scheme not in ("http", "https") or not parsed.netloc:
-            raise ValueError(f"base_url must be a full http(s) URL, got {base_url!r}")
         if auth_type not in AuthType.__members__:
             raise ValueError(f"unknown auth_type {auth_type!r}")
         connection_id = ConnectionId(generate_id("conn"))
@@ -148,6 +145,34 @@ class ConnectionService:
         self._publish(connection, CONNECTION_RENAMED)
         return connection
 
+    def update(
+        self,
+        connection_id: ConnectionId,
+        *,
+        instance_label: str,
+        base_url: str,
+        credentials: dict[str, str],
+        secret: str | None,
+    ) -> ErpConnection:
+        """Edit what the operator typed at registration. `erp_type` and `auth_type` are
+        fixed: changing them would silently change which adapter handles the connection.
+        A `None` or blank `secret` keeps the stored one, so an edit never needs the
+        password re-typed."""
+        _check_label_and_url(instance_label, base_url)
+        connection = self._repository.get(connection_id)
+        if connection is None:
+            raise ConnectionNotFound(str(connection_id))
+        if secret:
+            if not connection.secret_ref:
+                connection.secret_ref = f"erp-connection/{connection_id}"
+            self._secrets.put_secret(connection.secret_ref, secret)
+        connection.instance_label = instance_label
+        connection.base_url = base_url
+        connection.credentials = credentials
+        self._repository.update(connection)
+        self._publish(connection, CONNECTION_UPDATED)
+        return connection
+
     def _publish(self, connection: ErpConnection, event_type: str) -> None:
         # Never the secret refs — a fact is a notification other domains may log/inspect,
         # not a place to leak credential pointers.
@@ -164,3 +189,14 @@ class ConnectionService:
                 },
             )
         )
+
+
+def _check_label_and_url(instance_label: str, base_url: str) -> None:
+    """Validates the free-typed fields a typo most often lands in: a blank label or a
+    base_url that isn't a URL would otherwise sit silently until the first probe or
+    delivery fails against it."""
+    if not instance_label.strip():
+        raise ValueError("instance_label must not be blank")
+    parsed = urlparse(base_url.strip())
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"base_url must be a full http(s) URL, got {base_url!r}")

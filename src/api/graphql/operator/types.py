@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 import strawberry
+
+if TYPE_CHECKING:
+    # `strawberry.scalars.JSON` is a `NewType` instance, not a type form, so type
+    # checkers reject it in annotation position ("expected a type form, got instance
+    # of NewType"). Alias it to `Any` for the checker; at runtime it stays the real
+    # Strawberry scalar below, so the generated schema keeps its `JSON` scalar.
+    JSON = Any
+else:
+    JSON = strawberry.scalars.JSON
 
 
 @strawberry.type
@@ -86,7 +97,9 @@ class ConnectionType:
     erp_type: str
     instance_label: str
     base_url: str
-    credentials: strawberry.scalars.JSON  # generic non-secret params — never the secret itself
+    credentials: JSON  # generic non-secret params — never the secret itself
+    # AuthType name (NONE, BASIC, ...). Lets the edit form ask for the right secret.
+    auth_type: str
     status: str
     secret_ref: str
     has_webhook_secret: bool
@@ -98,6 +111,82 @@ class ConnectionType:
     # AWAITING_ADAPTER (already approved, waiting for the generated code to land), or
     # ADAPTER_READY (same fact as `hasAdapter`, spelled out for display).
     mapping_status: str
+
+
+@strawberry.type
+class OrderConflictType:
+    """A delivery that failed or was rejected, waiting for an operator. View-only for now."""
+
+    conflict_id: str
+    tenant_id: str
+    order_id: str
+    reason_code: str
+    reason: str
+    severity: str  # HIGH (the ERP rejected it) | MEDIUM (still being retried)
+    status: str  # OPEN | IN_REVIEW | RESOLVED | DISMISSED
+    attempts: int
+    opened_at: str
+    sla_due_at: str
+    resolved_at: str | None
+    resolution_note: str
+    category: str  # ConflictCategory, e.g. CUSTOMER_ON_HOLD
+    # Where the cause came from: RULE (a rule recognised it), AI (suggested by the model), or
+    # UNRECOGNISED (neither could say).
+    category_source: str
+
+
+@strawberry.type
+class SeverityRuleType:
+    """How urgent one cause is: when the ERP refused the order, and when delivery is retrying."""
+
+    category: str
+    label: str
+    when_rejected: str  # HIGH | MEDIUM | LOW
+    when_retrying: str
+
+
+@strawberry.type
+class ConflictExplanationType:
+    """A plain-English summary of one conflict. `text` is set when a summary was written;
+    otherwise `unavailable` says why there isn't one."""
+
+    text: str | None
+    unavailable: str | None
+
+
+@strawberry.type
+class WebhookEndpointType:
+    endpoint_id: str
+    name: str
+    url: str
+    event_types: list[str] | None  # null = subscribed to every dispatchable event
+    is_active: bool
+    auth_type: str  # how we authenticate to this URL: NONE, API_KEY_HEADER, BEARER_TOKEN, BASIC
+
+
+@strawberry.type
+class WebhookEndpointCreatedType:
+    """`signing_secret` is returned once, on creation only. See WebhookEndpointService."""
+
+    endpoint: WebhookEndpointType
+    signing_secret: str
+
+
+@strawberry.type
+class ErpFieldType:
+    key: str
+    label: str
+    hint: str
+    target: str
+    secret: bool
+
+
+@strawberry.type
+class ErpTypeType:
+    code: str
+    name: str
+    auth_type: str
+    fields: list[ErpFieldType]
 
 
 @strawberry.type
@@ -173,7 +262,7 @@ class OrderEventType:
     version: int
     occurred_at: str
     correlation_id: str | None
-    payload: strawberry.scalars.JSON
+    payload: JSON
 
 
 # --- ERP field-mapping proposer (operator "ERP mapping" tab) ---
@@ -233,7 +322,7 @@ class AuthConfigInput:
     straight into Key Vault and is never echoed back."""
 
     auth_type: str
-    params: strawberry.scalars.JSON
+    params: JSON
     secret: str | None = None
 
 
@@ -245,7 +334,7 @@ class SampleRequestInput:
     label: str
     method: str = "GET"
     path: str = ""
-    query_params: strawberry.scalars.JSON = strawberry.field(default_factory=dict)
+    query_params: JSON = strawberry.field(default_factory=dict)
 
 
 @strawberry.type

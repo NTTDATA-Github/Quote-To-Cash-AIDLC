@@ -1,0 +1,55 @@
+# Support images: mocks, the coding agent, Keycloak and Odoo. Each image builds only when
+# its Dockerfile or the files it copies change.
+name: Support images
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile.mocks"
+      - "Dockerfile.agent"
+      - "Dockerfile.keycloak"
+      - "Dockerfile.odoo"
+      - "erp-agent-service/**"
+      - "scripts/mock_netsuite.py"
+      - "scripts/dev_webhook_receiver.py"
+      - "scripts/odoo-boot.sh"
+      - "keycloak-realm-export.json"
+      - ".dockerignore"
+      - ".github/workflows/support-images.yml"
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile.mocks"
+      - "Dockerfile.agent"
+      - "Dockerfile.keycloak"
+      - "Dockerfile.odoo"
+      - "erp-agent-service/**"
+      - "scripts/mock_netsuite.py"
+      - "scripts/dev_webhook_receiver.py"
+      - "scripts/odoo-boot.sh"
+      - "keycloak-realm-export.json"
+      - ".dockerignore"
+      - ".github/workflows/support-images.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: support-images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Build ${{ matrix.image }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [mocks, agent, keycloak, odoo]
+    steps:
+      - uses: actions/checkout@v4
+      # Build only, no push.
+      - name: docker build Dockerfile.${{ matrix.image }}
+        run: docker build -f Dockerfile.${{ matrix.image }} -t o2c/${{ matrix.image }}:ci .

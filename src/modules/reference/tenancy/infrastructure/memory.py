@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..domain.models import Reseller
+from ..domain.models import BindingStatus, Reseller
 
 if TYPE_CHECKING:
     from src.shared.types import BindingId, ConnectionId, TenantId
@@ -32,7 +32,9 @@ class InMemoryBindingRepository:
             (
                 b
                 for b in self._by_id.values()
-                if b.tenant_id == tenant_id and b.connection_id == connection_id
+                if b.tenant_id == tenant_id
+                and b.connection_id == connection_id
+                and b.status is not BindingStatus.REMOVED
             ),
             None,
         )
@@ -44,7 +46,9 @@ class InMemoryBindingRepository:
             (
                 b
                 for b in self._by_id.values()
-                if b.connection_id == connection_id and b.erp_customer_id == erp_customer_id
+                if b.connection_id == connection_id
+                and b.erp_customer_id == erp_customer_id
+                and b.status is not BindingStatus.REMOVED
             ),
             None,
         )

@@ -10,6 +10,7 @@ from sqlalchemy import Boolean, Column, DateTime, Integer, MetaData, String, Tab
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from src.shared.erp_auth import AuthType
 from src.shared.types import TenantId, WebhookEndpointId
 
 from ..domain.models import DeliveryStatus, WebhookDelivery, WebhookEndpoint
@@ -30,6 +31,11 @@ webhook_endpoints_table = Table(
     Column("secret_ref", String, nullable=False),
     Column("event_types", JSONB),
     Column("is_active", Boolean, nullable=False),
+    # Credential we send to the receiver (migration 0018). The secret itself is in the
+    # secret store under auth_secret_ref, never in this row.
+    Column("auth_type", String, nullable=False, server_default="NONE"),
+    Column("auth_params", JSONB, nullable=False, server_default="{}"),
+    Column("auth_secret_ref", String),
 )
 
 webhook_deliveries_table = Table(
@@ -58,6 +64,9 @@ def _endpoint_from_row(row: Row) -> WebhookEndpoint:
         secret_ref=row.secret_ref,
         event_types=frozenset(row.event_types) if row.event_types else None,
         is_active=row.is_active,
+        auth_type=AuthType(row.auth_type),
+        auth_params=dict(row.auth_params or {}),
+        auth_secret_ref=row.auth_secret_ref,
     )
 
 
@@ -95,6 +104,9 @@ class PostgresWebhookEndpointRepository:
                     if endpoint.event_types is not None
                     else None,
                     is_active=endpoint.is_active,
+                    auth_type=endpoint.auth_type.value,
+                    auth_params=dict(endpoint.auth_params),
+                    auth_secret_ref=endpoint.auth_secret_ref,
                 )
             )
             session.commit()

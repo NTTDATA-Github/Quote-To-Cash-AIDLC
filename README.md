@@ -84,7 +84,8 @@ One-time setup, from the repo root:
 ```bash
 python -m venv .venv
 . .venv/Scripts/activate          # Windows Git Bash; source .venv/bin/activate on macOS/Linux
-pip install -e ".[dev]"
+pip install -r requirements-dev.lock   # exact, hash-checked versions (see scripts/lock.sh)
+pip install --no-deps -e .
 cd ui && npm install && cd ..
 ```
 
@@ -135,7 +136,7 @@ inbound webhook, and supply-chain check.
 Backend:
 
 ```bash
-pip install -e ".[dev]"
+pip install -r requirements-dev.lock && pip install --no-deps -e .
 pytest src tests
 ```
 
