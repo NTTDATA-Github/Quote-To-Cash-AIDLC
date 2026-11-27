@@ -415,6 +415,10 @@ def run_coding_agent(worktree_path: Path, prompt: str) -> str:
 
 
 def run_tests(worktree_path: Path) -> str:
+    # Same restricted environment as run_coding_agent, for the same reason: this runs
+    # code the agent just wrote, which test output (included verbatim in AgentRunError
+    # below, and in the PR body) could otherwise use to exfiltrate GITHUB_TOKEN via a
+    # deliberately crafted assertion message.
     result = subprocess.run(
         ["python", "-m", "pytest", "-q", "src/modules/integration/erp"],
         cwd=worktree_path,
@@ -423,6 +427,7 @@ def run_tests(worktree_path: Path) -> str:
         encoding="utf-8",
         errors="replace",
         timeout=600,
+        env=_agent_env(),
     )
     if result.returncode != 0:
         raise AgentRunError(f"tests failed:\n{result.stdout}\n{result.stderr}")

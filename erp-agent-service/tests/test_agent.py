@@ -183,6 +183,32 @@ def test_run_coding_agent_never_passes_github_token_to_the_subprocess(monkeypatc
     assert env.get("CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD") == "1"
 
 
+def test_run_tests_never_passes_github_token_to_the_subprocess(monkeypatch, tmp_path):
+    """Same exfiltration path as run_coding_agent, for the test runner: this subprocess
+    runs code the agent just wrote, and its output (test failure messages) is included
+    verbatim in AgentRunError and the PR body."""
+    import service.agent as agent
+
+    monkeypatch.setenv("GITHUB_TOKEN", "super-secret-token")
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs.get("env")
+
+        class _Result:
+            returncode = 0
+            stdout = "ok"
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(agent.subprocess, "run", fake_run)
+    agent.run_tests(tmp_path)
+
+    assert "GITHUB_TOKEN" not in captured["env"]
+
+
 def test_ensure_repo_fails_clearly_without_target_repo_url(monkeypatch, tmp_path):
     agent = _fresh_agent_module(monkeypatch, REPO_CACHE_DIR=str(tmp_path / "cache"))
     with pytest.raises(agent.AgentRunError, match="TARGET_REPO_URL is not set"):
