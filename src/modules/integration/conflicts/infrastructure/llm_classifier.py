@@ -14,7 +14,7 @@ from ..domain.categories import LABELS, ConflictCategory
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from src.modules.integration.mapping.application.ports import LlmClient
+    from src.shared.llm.client import LlmClient
 
 SYSTEM_PROMPT = (
     "You classify an error message that an ERP returned when it refused an order. Choose exactly "

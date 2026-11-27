@@ -14,7 +14,7 @@ from ..domain.models import ConflictExplanationUnavailable
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from src.modules.integration.mapping.application.ports import LlmClient
+    from src.shared.llm.client import LlmClient
 
     from ..domain.models import OrderConflict
 

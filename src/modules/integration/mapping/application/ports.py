@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Protocol
 
+from src.shared.llm.client import LlmClient as LlmClient  # re-exported for this module's own code
+
 if TYPE_CHECKING:
     from src.modules.reference.connections.domain.models import ErpConnection
     from src.shared.types import ConnectionId
@@ -47,13 +49,6 @@ class MappingJobRepository(Protocol):
     def claim_pending(self, limit: int = 5) -> list[MappingJob]:
         """Atomically mark up to `limit` PENDING jobs PROCESSING and return them."""
         ...
-
-
-class LlmClient(Protocol):
-    """A minimal text-in/text-out LLM call. The concrete client (Bedrock) lives in the
-    shared kernel — boto3 is not allowed inside `src.modules` — and is injected here."""
-
-    def ask(self, system: str, user: str) -> str: ...
 
 
 class MappingProposer(Protocol):
