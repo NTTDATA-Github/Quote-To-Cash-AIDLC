@@ -30,6 +30,7 @@ under a minute.
 | [0021](0021-connections-before-adapters.md) | An ERP connection can exist before its adapter does; `hasAdapter` is derived, not stored | Accepted |
 | [0022](0022-mapping-dedupe-by-erp-type.md) | Mapping/codegen is deduped per ERP type (registry + pending-job check), not per connection | Accepted |
 | [0023](0023-azure-migration.md) | Migrate infrastructure off AWS onto Azure, service-for-service, behind the existing ports | Proposed |
+| [0024](0024-ai-suggests-never-mutates.md) | Every AI feature suggests through one swappable `LlmClient` port, never mutates an order/ERP directly, and is computed once off the request path rather than live on every read | Accepted |
 
 ## How to read one
 
