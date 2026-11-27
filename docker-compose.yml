@@ -52,6 +52,7 @@ services:
   # Identity for AdminOps sign-in. The realm (o2c, client o2c-portal, demo user operator1)
   # is baked into Dockerfile.keycloak from keycloak-realm-export.json.
   keycloak:
+    image: o2c/keycloak:local
     build:
       context: .
       dockerfile: Dockerfile.keycloak

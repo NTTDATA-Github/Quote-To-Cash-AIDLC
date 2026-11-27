@@ -4,6 +4,21 @@
 #   bash scripts/local.sh up
 #   bash scripts/local.sh down
 set -euo pipefail
+
+# On Windows, `bash` on PATH can resolve to WSL's launcher instead of Git Bash
+# (e.g. typed into cmd.exe). That lands in a WSL distro that has neither the
+# Windows-side Docker Desktop nor Podman install this script needs, failing
+# deep inside with a confusing "command not found". Fail fast instead.
+if grep -qi microsoft /proc/version 2>/dev/null && [[ -z "${MSYSTEM:-}" ]]; then
+  cat >&2 <<'EOF'
+This script needs Git Bash on Windows, not WSL - Docker Desktop/Podman run on
+the Windows side, not inside a WSL distro. Run it from Git Bash instead:
+  "C:\Program Files\Git\bin\bash.exe" scripts/local.sh up
+or open a Git Bash terminal in this folder and run it there.
+EOF
+  exit 1
+fi
+
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
@@ -37,6 +52,15 @@ else
 fi
 
 mkdir -p .local
+
+# Docker Desktop or Podman, whichever actually has a working compose on PATH.
+# `docker` alone is not enough: a stray docker CLI (e.g. no compose plugin, no
+# daemon) must not be picked over a podman that works.
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+else
+  COMPOSE=(podman compose)
+fi
 
 stop_bg() {
   # Git Bash's $! is not the Windows PID, so kill by command-line match instead.
@@ -81,7 +105,12 @@ wait_for() {
 }
 
 up() {
-  docker compose up -d odoo-db odoo keycloak
+  # Built directly with the engine, not by compose: podman-compose's build-context path
+  # handling is broken on Windows (it can't find the Dockerfile in the context it's given),
+  # even though `podman build` itself works fine. --no-build then makes compose use the
+  # image this just built instead of retrying that broken path on its own.
+  "${COMPOSE[0]}" build -f Dockerfile.keycloak -t o2c/keycloak:local .
+  "${COMPOSE[@]}" up -d --no-build odoo-db odoo keycloak
   wait_for "Keycloak" 120 curl -sf "$KEYCLOAK_REALM_URL/.well-known/openid-configuration"
   # First Odoo boot installs modules, which takes a few minutes.
   wait_for "Odoo" 150 curl -sf http://127.0.0.1:8069/web/login
@@ -133,7 +162,7 @@ EOF
 
 down() {
   stop_bg
-  docker compose stop
+  "${COMPOSE[@]}" stop
   echo "Stopped. Start again with: bash scripts/local.sh up"
 }
 

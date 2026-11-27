@@ -6,9 +6,9 @@ the coding agent. It needs no cloud account. The README has the URLs and the sig
 
 ## Prerequisites
 
-- Docker Desktop, running
+- Docker Desktop or Podman (with `podman compose`), running
 - Python 3.11 and Node 20
-- Git Bash on Windows (the script runs under bash)
+- Git for Windows, on Windows (the script runs under its bash)
 
 ## Steps
 
@@ -20,9 +20,15 @@ cd ui && npm install && cd ..
 bash scripts/local.sh up
 ```
 
+On Windows, run `scripts\local.cmd up` instead of `bash scripts/local.sh up`, from
+`cmd.exe` or PowerShell — it finds your Git Bash install itself (registry, then PATH, then
+common install locations), so it works no matter where Git for Windows is installed and
+can't be hijacked by the unrelated `bash.exe` that ships with WSL.
+
 Sign in to AdminOps at http://127.0.0.1:5173 as `operator1` / `operator1`.
 
-Stop with `bash scripts/local.sh down`. Docker volumes are kept.
+Stop with `bash scripts/local.sh down` (`scripts\local.cmd down` on Windows). Docker
+volumes are kept.
 
 ## What runs where
 
@@ -45,7 +51,8 @@ Stop with `bash scripts/local.sh down`. Docker volumes are kept.
 
 ## Troubleshooting
 
-- **Keycloak does not come up.** Check `docker compose logs keycloak`. The realm import runs
+- **Keycloak does not come up.** Check `docker compose logs keycloak` (or `podman compose logs
+  keycloak`). The realm import runs
   on first boot.
 - **Sign-in fails with "Account is not fully set up".** The demo user needs first and last
   name in the realm export. See `Dockerfile.keycloak`.
