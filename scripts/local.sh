@@ -4,21 +4,6 @@
 #   bash scripts/local.sh up
 #   bash scripts/local.sh down
 set -euo pipefail
-
-# On Windows, `bash` on PATH can resolve to WSL's launcher instead of Git Bash
-# (e.g. typed into cmd.exe). That lands in a WSL distro that has neither the
-# Windows-side Docker Desktop nor Podman install this script needs, failing
-# deep inside with a confusing "command not found". Fail fast instead.
-if grep -qi microsoft /proc/version 2>/dev/null && [[ -z "${MSYSTEM:-}" ]]; then
-  cat >&2 <<'EOF'
-This script needs Git Bash on Windows, not WSL - Docker Desktop/Podman run on
-the Windows side, not inside a WSL distro. Run it from Git Bash instead:
-  "C:\Program Files\Git\bin\bash.exe" scripts/local.sh up
-or open a Git Bash terminal in this folder and run it there.
-EOF
-  exit 1
-fi
-
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 
@@ -55,11 +40,22 @@ mkdir -p .local
 
 # Docker Desktop or Podman, whichever actually has a working compose on PATH.
 # `docker` alone is not enough: a stray docker CLI (e.g. no compose plugin, no
-# daemon) must not be picked over a podman that works.
+# daemon) must not be picked over a podman that works. Checked by capability, not by
+# guessing from the environment - a WSL shell with Docker Desktop's WSL integration has
+# a perfectly good `docker compose` too.
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
   COMPOSE=(docker compose)
-else
+elif command -v podman >/dev/null 2>&1 && podman compose version >/dev/null 2>&1; then
   COMPOSE=(podman compose)
+else
+  cat >&2 <<'EOF'
+Neither `docker compose` nor `podman compose` works in this shell.
+On Windows, run this from Git Bash instead, where your Docker Desktop/Podman install is
+on PATH:
+  "C:\Program Files\Git\bin\bash.exe" scripts/local.sh up
+or scripts\local.cmd up from cmd.exe/PowerShell, which finds Git Bash for you.
+EOF
+  exit 1
 fi
 
 stop_bg() {
