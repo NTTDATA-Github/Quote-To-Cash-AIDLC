@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from src.shared.eventsourcing import EventSourcedRepository
 
     from ..domain.aggregate import Order
+    from ..projections.postgres_store import PostgresOrderProjectionStore
     from ..projections.store import OrderProjectionStore
 
 
@@ -56,7 +57,9 @@ class OrderCommandAdapter:
 
 class OrderReaderAdapter:
     def __init__(
-        self, projections: OrderProjectionStore, customers: CustomerDirectory | None = None
+        self,
+        projections: OrderProjectionStore | PostgresOrderProjectionStore,
+        customers: CustomerDirectory | None = None,
     ) -> None:
         self._projections = projections
         self._customers = customers

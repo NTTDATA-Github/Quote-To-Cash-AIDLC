@@ -29,6 +29,7 @@ class DemoRejectingAdapter:
     def __init__(self, inner: ErpAdapter, reject_customers: frozenset[str]) -> None:
         self._inner = inner
         self._reject_customers = reject_customers
+        self.capabilities = inner.capabilities
 
     def submit(self, target: ErpTarget, order_payload: dict[str, Any]) -> SubmissionResult:
         if str(order_payload.get("erp_customer_id")) in self._reject_customers:
