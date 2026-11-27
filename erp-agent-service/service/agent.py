@@ -357,11 +357,24 @@ def find_stale_worktree(erp_name: str, mapping: list[dict]) -> tuple[Path, str] 
 
 def run_coding_agent(worktree_path: Path, prompt: str) -> str:
     env = _agent_env()
-    # Mirrors the deny-list from the earlier Kiro-agent design for this same task —
-    # the agent never needs to commit/push itself (we do that in a separate step
-    # with a scoped, redacted-on-failure token) or touch package managers/containers.
-    # `git diff`/`git status` etc. stay allowed since reviewing its own changes is
-    # normal, harmless agent behavior; only the mutating/escalating commands are denied.
+    # A prefix denylist alone is not a real boundary: confirmed reports of `git -C
+    # <dir> reset --hard` bypassing a `git reset --hard` deny rule via flag reordering,
+    # and of a trailing command after `&&`/`;` slipping past a matching prefix rule
+    # with no denial even recorded. --allowedTools is the actual boundary here — only
+    # file tools plus the exact commands this task needs (review its own diff, run its
+    # own tests). --disallowedTools is kept as defense in depth: the docs say it takes
+    # precedence over the allowlist, so it costs nothing to keep both.
+    allowed = [
+        "Read",
+        "Edit",
+        "Write",
+        "Glob",
+        "Grep",
+        "Bash(git status*)",
+        "Bash(git diff*)",
+        "Bash(git log*)",
+        "Bash(python -m pytest*)",
+    ]
     disallowed = [
         "Bash(git commit*)",
         "Bash(git push*)",
@@ -381,6 +394,8 @@ def run_coding_agent(worktree_path: Path, prompt: str) -> str:
             prompt,
             "--permission-mode",
             "acceptEdits",
+            "--allowedTools",
+            *allowed,
             "--disallowedTools",
             *disallowed,
         ],

@@ -119,6 +119,38 @@ def test_run_coding_agent_disallows_mutating_git_and_escalation_commands(monkeyp
         assert pattern in disallowed
 
 
+def test_run_coding_agent_scopes_bash_to_an_allowlist_not_just_a_denylist(monkeypatch, tmp_path):
+    """Regression test: a prefix denylist alone is bypassable (confirmed reports of
+    flag-reordering and chained commands slipping past a matching Bash deny rule).
+    --allowedTools is the actual boundary; --disallowedTools stays as defense in depth."""
+    import service.agent as agent
+
+    captured = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+
+        class _Result:
+            returncode = 0
+            stdout = "ok"
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(agent.subprocess, "run", fake_run)
+    agent.run_coding_agent(tmp_path, "do the thing")
+
+    cmd = captured["cmd"]
+    assert "--allowedTools" in cmd
+    allowed = cmd[cmd.index("--allowedTools") + 1 : cmd.index("--disallowedTools")]
+    for tool in ["Read", "Edit", "Write", "Glob", "Grep", "Bash(python -m pytest*)"]:
+        assert tool in allowed
+    # Nothing that could commit, push, or escalate belongs in the allowlist either —
+    # the whole point is that the agent never gets a path to those at all, denylist or not.
+    for forbidden in ["Bash(git commit*)", "Bash(git push*)", "Bash(sudo*)", "Bash(rm -rf*)"]:
+        assert forbidden not in allowed
+
+
 def test_run_coding_agent_never_passes_github_token_to_the_subprocess(monkeypatch, tmp_path):
     """Regression test: the subprocess used to inherit the whole environment
     ({**os.environ}), including GITHUB_TOKEN — a real exfiltration path, since the
