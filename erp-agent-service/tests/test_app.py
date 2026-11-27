@@ -10,17 +10,19 @@ _PAYLOAD = {
 
 def _fresh_app(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'test.db'}")
+    # Otherwise app.py's own load_dotenv(.env) pulls in whatever's actually in the
+    # developer's real erp-agent-service/.env (a real AGENT_API_TOKEN, a real
+    # GITHUB_TOKEN) on every reload, making these tests depend on developer secrets
+    # and their exact contents instead of just the env this test sets up itself.
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: None)
     import service.app as app_module
 
     return importlib.reload(app_module)
 
 
 def test_runs_refuses_everything_when_no_token_is_configured(tmp_path, monkeypatch):
-    app_module = _fresh_app(tmp_path, monkeypatch)
-    # After the reload, not before: load_dotenv() only fills in vars that are missing,
-    # so deleting it here (post-import) is what actually keeps it unset for this request
-    # — deleting first would just let the reload below repopulate it from the real .env.
     monkeypatch.delenv("AGENT_API_TOKEN", raising=False)
+    app_module = _fresh_app(tmp_path, monkeypatch)
     client = TestClient(app_module.app)
 
     response = client.post("/runs", json=_PAYLOAD)

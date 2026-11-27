@@ -24,7 +24,11 @@ export KEYCLOAK_CLIENT_ID="o2c-portal"
 # check) — read it from that service's .env so the api sends the same value it does,
 # rather than keeping the secret in two places that could drift apart.
 if [[ -f erp-agent-service/.env ]]; then
-  AGENT_API_TOKEN="$(grep -m1 '^AGENT_API_TOKEN=' erp-agent-service/.env | cut -d= -f2-)"
+  # `|| true`: grep finds nothing on a .env from before this line existed, and under
+  # set -e that would otherwise kill this whole script right here. tr strips a \r —
+  # this file gets edited on Windows. agent-api just won't accept requests until the
+  # token is added; that's its own problem to report, not this script's to crash over.
+  AGENT_API_TOKEN="$(grep -m1 '^AGENT_API_TOKEN=' erp-agent-service/.env 2>/dev/null | cut -d= -f2- | tr -d '\r')" || true
   [[ -n "$AGENT_API_TOKEN" ]] && export AGENT_API_TOKEN
 fi
 
