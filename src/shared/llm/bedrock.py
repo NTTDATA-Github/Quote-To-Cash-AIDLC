@@ -37,6 +37,9 @@ class BedrockLlmClient:
         return self._client
 
     def ask(self, system: str, user: str, max_tokens: int = _MAX_TOKENS) -> str:
+        # No `temperature` in inferenceConfig: newer Claude models on Bedrock (confirmed
+        # live on claude-haiku-5-5) reject it outright — "`temperature` is deprecated for
+        # this model" — rather than clamping or ignoring it.
         token = os.environ.get("AWS_BEARER_TOKEN_BEDROCK", "").strip()
         if token:
             # Bearer auth goes to the real Converse endpoint.
@@ -50,7 +53,7 @@ class BedrockLlmClient:
             modelId=self._model_id,
             system=[{"text": system}],
             messages=[{"role": "user", "content": [{"text": user}]}],
-            inferenceConfig={"maxTokens": max_tokens, "temperature": 0},
+            inferenceConfig={"maxTokens": max_tokens},
         )
         return _text(response)
 
@@ -63,7 +66,7 @@ class BedrockLlmClient:
             {
                 "system": [{"text": system}],
                 "messages": [{"role": "user", "content": [{"text": user}]}],
-                "inferenceConfig": {"maxTokens": max_tokens, "temperature": 0},
+                "inferenceConfig": {"maxTokens": max_tokens},
             }
         ).encode()
         request = urllib.request.Request(

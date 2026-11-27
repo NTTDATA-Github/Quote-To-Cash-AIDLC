@@ -145,7 +145,7 @@ def get_settings() -> Settings:
             if origin.strip()
         ],
         mapping_bedrock_model_id=os.environ.get(
-            "MAPPING_BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-5-5-v1:0"
+            "MAPPING_BEDROCK_MODEL_ID", "us.anthropic.claude-haiku-5-5"
         ),
         mapping_anthropic_model=os.environ.get("MAPPING_ANTHROPIC_MODEL", "claude-haiku-5-5"),
         llm_provider=os.environ.get("LLM_PROVIDER"),
