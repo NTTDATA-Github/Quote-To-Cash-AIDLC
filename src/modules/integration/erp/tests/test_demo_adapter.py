@@ -12,6 +12,8 @@ TARGET = ErpTarget(erp_type="ODOO", base_url="http://odoo", credentials={}, secr
 
 
 class _Inner:
+    capabilities: frozenset[str] = frozenset()
+
     def __init__(self) -> None:
         self.submitted: list[dict[str, Any]] = []
 
