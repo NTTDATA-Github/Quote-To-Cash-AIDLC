@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from src.shared.llm.client import retry_with_backoff
+
 from ..domain.categories import LABELS, ConflictCategory
 
 if TYPE_CHECKING:
@@ -41,14 +43,18 @@ class LlmCauseClassifier:
         self._cache: dict[str, ConflictCategory | None] = {}
 
     def classify(self, message: str) -> ConflictCategory | None:
-        """The suggested cause, or None when the model fails or gives an answer we don't know."""
+        """The suggested cause, or None when the model fails (after retrying) or gives an
+        answer we don't know."""
         if message not in self._cache:
             try:
                 if self._client is None:
                     self._client = self._client_factory()
-                self._cache[message] = _parse(self._client.ask(SYSTEM_PROMPT, message))
+                client = self._client
+                answer = retry_with_backoff(lambda: client.ask(SYSTEM_PROMPT, message))
+                self._cache[message] = _parse(answer)
             except Exception:
-                # A failed call is not cached, so the next view tries again.
+                # A failed call (even after retries) is not cached, so the next
+                # delivery failure for this order tries classification again.
                 return None
         return self._cache[message]
 

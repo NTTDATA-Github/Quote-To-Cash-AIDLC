@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from src.modules.integration.conflicts.domain.categories import ConflictCategory
 from src.modules.integration.conflicts.infrastructure.llm_classifier import (
     SYSTEM_PROMPT,
     LlmCauseClassifier,
     UnavailableCauseClassifier,
 )
+
+if TYPE_CHECKING:
+    import pytest
 
 
 class _Client:
@@ -39,7 +44,9 @@ def test_the_same_message_is_asked_once() -> None:
     assert client.calls == 1
 
 
-def test_a_failed_call_is_not_cached_and_returns_nothing() -> None:
+def test_a_failed_call_is_not_cached_and_returns_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.shared.llm.client.time.sleep", lambda _seconds: None)
+
     class _Failing:
         calls = 0
 
@@ -51,6 +58,26 @@ def test_a_failed_call_is_not_cached_and_returns_nothing() -> None:
     classifier = LlmCauseClassifier(lambda: client)
     assert classifier.classify("0x4F2") is None
     assert classifier.classify("0x4F2") is None
+    # 3 retries per failed call (see retry_with_backoff), and each call is a fresh
+    # attempt since a failure is never cached.
+    assert client.calls == 6
+
+
+def test_a_transient_failure_recovers_on_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.shared.llm.client.time.sleep", lambda _seconds: None)
+
+    class _FailsOnceThenWorks:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def ask(self, system: str, user: str, max_tokens: int = 0) -> str:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("transient DNS failure")
+            return "ADDRESS_PROBLEM"
+
+    client = _FailsOnceThenWorks()
+    assert LlmCauseClassifier(lambda: client).classify("0x4F2") is ConflictCategory.ADDRESS_PROBLEM
     assert client.calls == 2
 
 

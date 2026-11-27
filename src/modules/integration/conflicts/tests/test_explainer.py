@@ -112,6 +112,26 @@ def test_a_changed_severity_gets_a_fresh_summary() -> None:
     assert len(client.calls) == 2
 
 
+def test_a_transient_failure_recovers_on_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("src.shared.llm.client.time.sleep", lambda _seconds: None)
+
+    class _FailsOnceThenWorks:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def ask(self, system: str, user: str, max_tokens: int = 0) -> str:
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("transient DNS failure")
+            return "Recovered summary."
+
+    client = _FailsOnceThenWorks()
+    text = LlmConflictExplainer(lambda: client).explain(_conflict(), "EXN")
+
+    assert text == "Recovered summary."
+    assert client.calls == 2
+
+
 def test_without_a_provider_the_summary_says_why_it_is_unavailable() -> None:
     with pytest.raises(ConflictExplanationUnavailable, match="LLM_PROVIDER"):
         UnavailableConflictExplainer().explain(_conflict(), "EXN")

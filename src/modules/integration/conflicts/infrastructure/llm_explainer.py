@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from src.shared.llm.client import retry_with_backoff
+
 from ..domain.models import ConflictExplanationUnavailable
 
 if TYPE_CHECKING:
@@ -64,7 +66,12 @@ class LlmConflictExplainer:
         if key not in self._cache:
             if self._client is None:
                 self._client = self._client_factory()
-            self._cache[key] = self._client.ask(SYSTEM_PROMPT, facts).strip()
+            client = self._client
+            # A transient failure (the DNS flakiness this exact network has shown)
+            # retries here instead of only on the operator's next manual "Try again" -
+            # still not cached on a final failure, so the operator's own retry
+            # (or the next view) tries fresh rather than serving a stale non-answer.
+            self._cache[key] = retry_with_backoff(lambda: client.ask(SYSTEM_PROMPT, facts)).strip()
         return self._cache[key]
 
 

@@ -7,12 +7,13 @@ from __future__ import annotations
 
 from .anthropic import AnthropicLlmClient
 from .bedrock import BedrockLlmClient
-from .client import LlmClient
+from .client import LlmClient, retry_with_backoff
 from .foundry import AzureFoundryLlmClient
 from .openai import OpenAiLlmClient
 
 __all__ = [
     "LlmClient",
+    "retry_with_backoff",
     "AnthropicLlmClient",
     "BedrockLlmClient",
     "AzureFoundryLlmClient",
